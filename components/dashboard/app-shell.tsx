@@ -5,7 +5,14 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { workspaceTitle } from '@/lib/constants/workspace';
 import { defaultBoardId } from '@/lib/mock-data/boards';
-import { createBoardFromTemplate, deleteBoard, loadStoredBoards, mergeBoards, saveBoard, BOARD_STORAGE_EVENT } from '@/lib/utils/board-storage';
+import {
+  loadBoards,
+  mergeBoards,
+  saveBoardAsync,
+  deleteBoardAsync,
+  createBoardFromTemplateAsync,
+  BOARD_STORAGE_EVENT,
+} from '@/lib/utils/board-storage';
 import { getBoards } from '@/lib/utils/board';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
@@ -57,7 +64,7 @@ export function AppShell({ children, activeBoardId }: AppShellProps) {
 
   useEffect(() => {
     function syncBoards() {
-      setBoards(mergeBoards(staticBoards, loadStoredBoards()));
+      loadBoards().then((stored) => setBoards(mergeBoards(staticBoards, stored)));
     }
 
     syncBoards();
@@ -80,7 +87,7 @@ export function AppShell({ children, activeBoardId }: AppShellProps) {
     setNewBoardName('');
   }
 
-  function handleCreateBoard(event: FormEvent<HTMLFormElement>) {
+  async function handleCreateBoard(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const templateBoard =
@@ -92,15 +99,14 @@ export function AppShell({ children, activeBoardId }: AppShellProps) {
       return;
     }
 
-    const nextBoard = createBoardFromTemplate(templateBoard, boards, newBoardName);
-    saveBoard(nextBoard);
+    const nextBoard = await createBoardFromTemplateAsync(templateBoard, boards, newBoardName);
     setBoards((current) => mergeBoards(current, [nextBoard]));
     closeCreateBoardModal();
     router.push(`/boards/${nextBoard.id}`);
   }
 
-  function handleDeleteBoard(boardId: string) {
-    deleteBoard(boardId);
+  async function handleDeleteBoard(boardId: string) {
+    await deleteBoardAsync(boardId);
     setBoards((current) => current.filter((board) => board.id !== boardId));
 
     if (activeBoardId === boardId) {
@@ -108,11 +114,11 @@ export function AppShell({ children, activeBoardId }: AppShellProps) {
     }
   }
 
-  function handleRemoveFromFavorites(boardId: string) {
+  async function handleRemoveFromFavorites(boardId: string) {
     const board = boards.find((b) => b.id === boardId);
     if (!board) return;
     setOpenDropdownBoardId((id) => (id === boardId ? null : id));
-    saveBoard({ ...board, favorites: false });
+    await saveBoardAsync({ ...board, favorites: false });
     setBoards((current) =>
       current.map((b) => (b.id === boardId ? { ...b, favorites: false } : b))
     );

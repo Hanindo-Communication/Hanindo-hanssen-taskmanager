@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { priorityLabels, priorityOrder, statusLabels, statusOrder } from '@/lib/mock-data/boards';
-import { getStoredBoardById, saveBoard } from '@/lib/utils/board-storage';
+import { loadBoardById, saveBoardAsync } from '@/lib/utils/board-storage';
 import { formatDate, getMember } from '@/lib/utils/board';
 import type { Board, TaskGroup, TaskItem, TaskPriority, TaskStatus, ViewMode } from '@/lib/types/board';
 import styles from './board-client.module.css';
@@ -333,6 +333,7 @@ function EditableTextField({
 
 export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   const [board, setBoard] = useState<Board | null>(initialBoard);
+  const [boardLoading, setBoardLoading] = useState(!initialBoard);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
@@ -348,14 +349,22 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   const todayReference = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   useEffect(() => {
-    const storedBoard = getStoredBoardById(boardId);
-
-    if (storedBoard) {
-      setBoard(storedBoard);
+    let cancelled = false;
+    if (initialBoard && initialBoard.id === boardId) {
+      setBoard(initialBoard);
+      setBoardLoading(false);
       return;
     }
-
-    setBoard(initialBoard);
+    setBoardLoading(true);
+    loadBoardById(boardId).then((loaded) => {
+      if (!cancelled) {
+        setBoard(loaded ?? initialBoard);
+        setBoardLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [boardId, initialBoard]);
 
   useEffect(() => {
@@ -369,9 +378,11 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   }, [boardId, board]);
 
   useEffect(() => {
-    if (board) {
-      saveBoard(board);
-    }
+    if (!board) return;
+    const t = setTimeout(() => {
+      saveBoardAsync(board);
+    }, 800);
+    return () => clearTimeout(t);
   }, [board]);
 
   const visibleGroups = useMemo(() => {
@@ -700,6 +711,17 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
         group: taskGroupMap.get(task.id) ?? { id: '', name: '' },
       })),
   }));
+
+  if (boardLoading) {
+    return (
+      <section className={styles.boardSurface}>
+        <div className={styles.emptyState}>
+          <p className={styles.heroEyebrow}>Loading</p>
+          <h3 className={styles.heroTitle}>Loading board…</h3>
+        </div>
+      </section>
+    );
+  }
 
   if (!board) {
     return (

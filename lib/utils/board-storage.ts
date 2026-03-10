@@ -1,8 +1,20 @@
 'use client';
 
+import { createClient } from '@/lib/supabase/client';
+import {
+  fetchBoardsFromSupabase,
+  fetchBoardByIdFromSupabase,
+  saveBoardToSupabase,
+  deleteBoardFromSupabase,
+  createBoardFromTemplateInSupabase,
+} from '@/lib/supabase/boards';
 import { workspaceTitle } from '@/lib/constants/workspace';
 import { defaultBoardId } from '@/lib/mock-data/boards';
 import type { Board } from '@/lib/types/board';
+
+function isSupabaseConfigured(): boolean {
+  return createClient() !== null;
+}
 
 const BOARD_STORAGE_KEY = 'task-manager.boards';
 const DELETED_BOARD_IDS_KEY = 'task-manager.deleted-board-ids';
@@ -157,4 +169,80 @@ export function createBoardFromTemplate(template: Board, existingBoards: Board[]
       activeAutomations: 0,
     },
   });
+}
+
+// --- Async API: uses Supabase when configured, else localStorage (sync) ---
+
+export async function loadBoards(): Promise<Board[]> {
+  if (typeof window === 'undefined') return [];
+  if (isSupabaseConfigured()) {
+    try {
+      return await fetchBoardsFromSupabase();
+    } catch {
+      return loadStoredBoards();
+    }
+  }
+  return loadStoredBoards();
+}
+
+export async function loadBoardById(boardId: string): Promise<Board | null> {
+  if (typeof window === 'undefined') return null;
+  if (isSupabaseConfigured()) {
+    try {
+      return await fetchBoardByIdFromSupabase(boardId);
+    } catch {
+      return getStoredBoardById(boardId) ?? null;
+    }
+  }
+  return getStoredBoardById(boardId) ?? null;
+}
+
+export async function saveBoardAsync(board: Board): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (isSupabaseConfigured()) {
+    try {
+      await saveBoardToSupabase(board);
+    } catch {
+      saveBoard(board);
+    }
+    dispatchBoardsUpdated();
+    return;
+  }
+  saveBoard(board);
+}
+
+export async function deleteBoardAsync(boardId: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  if (isSupabaseConfigured()) {
+    try {
+      await deleteBoardFromSupabase(boardId);
+    } catch {
+      deleteBoard(boardId);
+    }
+    dispatchBoardsUpdated();
+    return;
+  }
+  deleteBoard(boardId);
+}
+
+export async function createBoardFromTemplateAsync(
+  template: Board,
+  existingBoards: Board[],
+  name?: string
+): Promise<Board> {
+  if (typeof window === 'undefined') {
+    return createBoardFromTemplate(template, existingBoards, name);
+  }
+  if (isSupabaseConfigured()) {
+    try {
+      return await createBoardFromTemplateInSupabase(template, existingBoards, name);
+    } catch {
+      const next = createBoardFromTemplate(template, existingBoards, name);
+      saveBoard(next);
+      return next;
+    }
+  }
+  const next = createBoardFromTemplate(template, existingBoards, name);
+  saveBoard(next);
+  return next;
 }
