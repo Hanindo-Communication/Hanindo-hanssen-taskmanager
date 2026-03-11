@@ -5,8 +5,17 @@ import { priorityLabels, priorityOrder, statusLabels, statusOrder } from '@/lib/
 import { loadBoardById, saveBoardAsync } from '@/lib/utils/board-storage';
 import { formatDate, getMember } from '@/lib/utils/board';
 import { useWorkspaceRole } from '@/lib/contexts/WorkspaceRoleContext';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Board, TaskGroup, TaskItem, TaskPriority, TaskStatus, ViewMode } from '@/lib/types/board';
 import styles from './board-client.module.css';
+
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  message: string;
+  variant: 'danger' | 'default';
+  onConfirm: () => void;
+};
 
 type BoardClientProps = {
   initialBoard: Board | null;
@@ -347,6 +356,13 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [tableDropTarget, setTableDropTarget] = useState<{ groupId: string; taskId?: string } | null>(null);
   const [kanbanDropTarget, setKanbanDropTarget] = useState<{ status: TaskStatus; taskId?: string } | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>({
+    open: false,
+    title: '',
+    message: '',
+    variant: 'default',
+    onConfirm: () => {},
+  });
   const viewMode: ViewMode = 'table';
   const allTasks = useMemo(() => board?.groups.flatMap((group) => group.tasks) ?? [], [board]);
   const todayReference = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -547,22 +563,41 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   }
 
   function handleDeleteTask(taskId: string) {
-    setSelectedTaskIds((current) => current.filter((id) => id !== taskId));
-    setDetailTaskId((current) => (current === taskId ? null : current));
-    updateCurrentBoard((currentBoard) => deleteTask(currentBoard, taskId));
+    setConfirm({
+      open: true,
+      title: 'Delete item?',
+      message: 'This task will be removed. This action cannot be undone.',
+      variant: 'danger',
+      onConfirm: () => {
+        setSelectedTaskIds((current) => current.filter((id) => id !== taskId));
+        setDetailTaskId((current) => (current === taskId ? null : current));
+        updateCurrentBoard((currentBoard) => deleteTask(currentBoard, taskId));
+        setConfirm((c) => ({ ...c, open: false }));
+      },
+    });
   }
 
   function handleDeleteGroup(groupId: string) {
-    const taskIdsToRemove = board?.groups.find((group) => group.id === groupId)?.tasks.map((task) => task.id) ?? [];
-
-    setSelectedTaskIds((current) => current.filter((id) => !taskIdsToRemove.includes(id)));
-    setDetailTaskId((current) => (current && taskIdsToRemove.includes(current) ? null : current));
-    setCollapsedGroups((current) => {
-      const next = { ...current };
-      delete next[groupId];
-      return next;
+    const group = board?.groups.find((g) => g.id === groupId);
+    const taskCount = group?.tasks.length ?? 0;
+    setConfirm({
+      open: true,
+      title: 'Delete segment?',
+      message: `This will remove the segment "${group?.name ?? 'Untitled'}" and all ${taskCount} item(s) in it. This action cannot be undone.`,
+      variant: 'danger',
+      onConfirm: () => {
+        const taskIdsToRemove = group?.tasks.map((task) => task.id) ?? [];
+        setSelectedTaskIds((current) => current.filter((id) => !taskIdsToRemove.includes(id)));
+        setDetailTaskId((current) => (current && taskIdsToRemove.includes(current) ? null : current));
+        setCollapsedGroups((current) => {
+          const next = { ...current };
+          delete next[groupId];
+          return next;
+        });
+        updateCurrentBoard((currentBoard) => deleteGroup(currentBoard, groupId));
+        setConfirm((c) => ({ ...c, open: false }));
+      },
     });
-    updateCurrentBoard((currentBoard) => deleteGroup(currentBoard, groupId));
   }
 
   function handleMoveGroup(groupId: string, direction: 'up' | 'down') {
@@ -1007,10 +1042,19 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
               className={styles.controlSelect}
               defaultValue=""
               onChange={(event) => {
-                if (event.target.value) {
-                  applyBulkStatus(event.target.value as TaskStatus);
-                  event.target.value = '';
-                }
+                const value = event.target.value as TaskStatus;
+                if (!value) return;
+                setConfirm({
+                  open: true,
+                  title: 'Bulk change status?',
+                  message: `Change status of ${selectedCount} selected item(s) to "${statusLabels[value]}"?`,
+                  variant: 'default',
+                  onConfirm: () => {
+                    applyBulkStatus(value);
+                    setConfirm((c) => ({ ...c, open: false }));
+                  },
+                });
+                event.target.value = '';
               }}
             >
               <option value="">Bulk status</option>
@@ -1024,10 +1068,20 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
               className={styles.controlSelect}
               defaultValue=""
               onChange={(event) => {
-                if (event.target.value) {
-                  applyBulkMove(event.target.value);
-                  event.target.value = '';
-                }
+                const targetGroupId = event.target.value;
+                if (!targetGroupId) return;
+                const targetGroup = board.groups.find((g) => g.id === targetGroupId);
+                setConfirm({
+                  open: true,
+                  title: 'Move items?',
+                  message: `Move ${selectedCount} selected item(s) to "${targetGroup?.name ?? 'group'}"?`,
+                  variant: 'default',
+                  onConfirm: () => {
+                    applyBulkMove(targetGroupId);
+                    setConfirm((c) => ({ ...c, open: false }));
+                  },
+                });
+                event.target.value = '';
               }}
             >
               <option value="">Move to group</option>
@@ -1583,6 +1637,17 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={confirm.open}
+        title={confirm.title}
+        message={confirm.message}
+        variant={confirm.variant}
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        onConfirm={confirm.onConfirm}
+        onCancel={() => setConfirm((c) => ({ ...c, open: false }))}
+      />
     </section>
   );
 }

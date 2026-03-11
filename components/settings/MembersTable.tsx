@@ -7,9 +7,18 @@ import {
   removeWorkspaceMember,
 } from '@/lib/utils/workspace-members';
 import { useWorkspaceRole } from '@/lib/contexts/WorkspaceRoleContext';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { WorkspaceMember } from '@/lib/types/workspace';
 import type { MemberRole } from '@/lib/types/board';
 import styles from './MembersTable.module.css';
+
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  message: string;
+  variant: 'danger' | 'default';
+  onConfirm: () => void;
+};
 
 const ROLES: { value: MemberRole; label: string }[] = [
   { value: 'admin', label: 'Admin' },
@@ -24,6 +33,13 @@ export function MembersTable() {
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState<MemberRole>('member');
+  const [confirm, setConfirm] = useState<ConfirmState>({
+    open: false,
+    title: '',
+    message: '',
+    variant: 'default',
+    onConfirm: () => {},
+  });
 
   const refresh = useCallback(() => {
     setLoading(true);
@@ -41,9 +57,19 @@ export function MembersTable() {
     (id: string, role: MemberRole) => {
       const m = members.find((x) => x.id === id);
       if (!m || !canManageMembers) return;
-      const next = { ...m, role };
-      setMembers((prev) => prev.map((x) => (x.id === id ? next : x)));
-      void saveWorkspaceMember(next);
+      const roleLabel = ROLES.find((r) => r.value === role)?.label ?? role;
+      setConfirm({
+        open: true,
+        title: 'Change role?',
+        message: `Change ${m.name}'s role to "${roleLabel}"?`,
+        variant: 'default',
+        onConfirm: () => {
+          const next = { ...m, role };
+          setMembers((prev) => prev.map((x) => (x.id === id ? next : x)));
+          void saveWorkspaceMember(next);
+          setConfirm((c) => ({ ...c, open: false }));
+        },
+      });
     },
     [members, canManageMembers]
   );
@@ -51,22 +77,42 @@ export function MembersTable() {
   const handleRemove = useCallback(
     (id: string) => {
       if (!canManageMembers) return;
-      void removeWorkspaceMember(id).then(() => refresh());
+      const m = members.find((x) => x.id === id);
+      setConfirm({
+        open: true,
+        title: 'Remove member?',
+        message: `Remove "${m?.name ?? m?.email ?? 'this member'}" from the workspace? They will lose access.`,
+        variant: 'danger',
+        onConfirm: () => {
+          void removeWorkspaceMember(id).then(() => refresh());
+          setConfirm((c) => ({ ...c, open: false }));
+        },
+      });
     },
-    [canManageMembers, refresh]
+    [canManageMembers, members, refresh]
   );
 
   const handleAdd = useCallback(() => {
     const email = newEmail.trim().toLowerCase();
     const name = newName.trim() || email.split('@')[0] || 'Member';
     if (!email || !canManageMembers) return;
-    const id = crypto.randomUUID();
-    const member: WorkspaceMember = { id, email, name, role: newRole };
-    void saveWorkspaceMember(member).then(() => {
-      setMembers((prev) => [...prev, member]);
-      setNewEmail('');
-      setNewName('');
-      setNewRole('member');
+    const roleLabel = ROLES.find((r) => r.value === newRole)?.label ?? newRole;
+    setConfirm({
+      open: true,
+      title: 'Add member?',
+      message: `Add ${name} (${email}) with role "${roleLabel}"?`,
+      variant: 'default',
+      onConfirm: () => {
+        const id = crypto.randomUUID();
+        const member: WorkspaceMember = { id, email, name, role: newRole };
+        void saveWorkspaceMember(member).then(() => {
+          setMembers((prev) => [...prev, member]);
+          setNewEmail('');
+          setNewName('');
+          setNewRole('member');
+        });
+        setConfirm((c) => ({ ...c, open: false }));
+      },
     });
   }, [newEmail, newName, newRole, canManageMembers]);
 
@@ -172,6 +218,17 @@ export function MembersTable() {
           </p>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirm.open}
+        title={confirm.title}
+        message={confirm.message}
+        variant={confirm.variant}
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        onConfirm={confirm.onConfirm}
+        onCancel={() => setConfirm((c) => ({ ...c, open: false }))}
+      />
     </div>
   );
 }

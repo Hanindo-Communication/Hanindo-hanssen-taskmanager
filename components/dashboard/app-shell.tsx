@@ -20,10 +20,19 @@ import {
   WORKSPACE_MEMBERS_EVENT,
 } from '@/lib/utils/workspace-members';
 import { WorkspaceRoleProvider } from '@/lib/contexts/WorkspaceRoleContext';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { MemberRole } from '@/lib/types/board';
 import styles from './app-shell.module.css';
+
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  message: string;
+  variant: 'danger' | 'default';
+  onConfirm: () => void;
+};
 
 type AppShellProps = {
   children: React.ReactNode;
@@ -56,6 +65,13 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
   const [user, setUser] = useState<User | null>(null);
   const [openDropdownBoardId, setOpenDropdownBoardId] = useState<string | null>(null);
   const [isFavoritesEditMode, setIsFavoritesEditMode] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmState>({
+    open: false,
+    title: '',
+    message: '',
+    variant: 'default',
+    onConfirm: () => {},
+  });
   const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; email: string; name: string; role: MemberRole }[]>([]);
   const userRole: MemberRole | null = useMemo(() => {
     if (workspaceMembers.length === 0) return 'admin'; // first-time: allow full access to set up
@@ -129,23 +145,41 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
     router.push(`/boards/${nextBoard.id}`);
   }
 
-  async function handleDeleteBoard(boardId: string) {
-    await deleteBoardAsync(boardId);
-    setBoards((current) => current.filter((board) => board.id !== boardId));
-
-    if (activeBoardId === boardId) {
-      router.push('/');
-    }
+  function requestDeleteBoard(boardId: string) {
+    const board = boards.find((b) => b.id === boardId);
+    setConfirm({
+      open: true,
+      title: 'Delete project?',
+      message: `"${board?.name ?? 'This project'}" and all its data will be permanently removed. This action cannot be undone.`,
+      variant: 'danger',
+      onConfirm: async () => {
+        await deleteBoardAsync(boardId);
+        setBoards((current) => current.filter((board) => board.id !== boardId));
+        setConfirm((c) => ({ ...c, open: false }));
+        if (activeBoardId === boardId) {
+          router.push('/');
+        }
+      },
+    });
   }
 
-  async function handleRemoveFromFavorites(boardId: string) {
+  function requestRemoveFromFavorites(boardId: string) {
     const board = boards.find((b) => b.id === boardId);
     if (!board) return;
-    setOpenDropdownBoardId((id) => (id === boardId ? null : id));
-    await saveBoardAsync({ ...board, favorites: false });
-    setBoards((current) =>
-      current.map((b) => (b.id === boardId ? { ...b, favorites: false } : b))
-    );
+    setConfirm({
+      open: true,
+      title: 'Remove from Favorites?',
+      message: `Remove "${board.name}" from your Favorites list? You can still find it under Programs/Projects.`,
+      variant: 'default',
+      onConfirm: async () => {
+        setOpenDropdownBoardId((id) => (id === boardId ? null : id));
+        await saveBoardAsync({ ...board, favorites: false });
+        setBoards((current) =>
+          current.map((b) => (b.id === boardId ? { ...b, favorites: false } : b))
+        );
+        setConfirm((c) => ({ ...c, open: false }));
+      },
+    });
   }
 
   async function handleSignOut() {
@@ -242,7 +276,7 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      void handleRemoveFromFavorites(board.id);
+                      requestRemoveFromFavorites(board.id);
                     }}
                     aria-label={`Remove ${board.name} from Favorites`}
                     title="Remove from Favorites"
@@ -256,7 +290,7 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        void handleDeleteBoard(board.id);
+                        requestDeleteBoard(board.id);
                       }}
                       aria-label={`Delete ${board.name}`}
                       title="Delete project"
@@ -346,7 +380,7 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      void handleDeleteBoard(board.id);
+                      requestDeleteBoard(board.id);
                     }}
                     aria-label={`Delete ${board.name}`}
                   >
@@ -501,6 +535,17 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
           </div>
         </div>
       ) : null}
+
+      <ConfirmDialog
+        open={confirm.open}
+        title={confirm.title}
+        message={confirm.message}
+        variant={confirm.variant}
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        onConfirm={confirm.onConfirm}
+        onCancel={() => setConfirm((c) => ({ ...c, open: false }))}
+      />
 
       <div className={styles.motivationWidget}>
         {isMotivationOpen ? (

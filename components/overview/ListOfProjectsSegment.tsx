@@ -2,7 +2,16 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import type { Board } from '@/lib/types/board';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import styles from './ListOfProjectsSegment.module.css';
+
+type ConfirmState = {
+  open: boolean;
+  title: string;
+  message: string;
+  variant: 'danger' | 'default';
+  onConfirm: () => void;
+};
 
 const STORAGE_KEY = 'task-manager-list-of-projects';
 
@@ -81,6 +90,13 @@ export function ListOfProjectsSegment({ boards }: ListOfProjectsSegmentProps) {
     loadFromStorage(boards) ?? getDefaultMembers(boards)
   );
   const [openMemberId, setOpenMemberId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState>({
+    open: false,
+    title: '',
+    message: '',
+    variant: 'default',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     saveToStorage(members);
@@ -103,14 +119,25 @@ export function ListOfProjectsSegment({ boards }: ListOfProjectsSegmentProps) {
   }, []);
 
   const removeProject = useCallback((memberId: string, index: number) => {
-    setMembers((prev) =>
-      prev.map((m) =>
-        m.id === memberId
-          ? { ...m, projects: m.projects.filter((_, i) => i !== index) }
-          : m
-      )
-    );
-  }, []);
+    const member = members.find((m) => m.id === memberId);
+    const projectName = member?.projects[index] ?? 'this project';
+    setConfirm({
+      open: true,
+      title: 'Remove project?',
+      message: `Remove "${projectName}" from ${member?.name ?? 'member'}'s list?`,
+      variant: 'default',
+      onConfirm: () => {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.id === memberId
+              ? { ...m, projects: m.projects.filter((_, i) => i !== index) }
+              : m
+          )
+        );
+        setConfirm((c) => ({ ...c, open: false }));
+      },
+    });
+  }, [members]);
 
   const updateProjectName = useCallback((memberId: string, index: number, name: string) => {
     setMembers((prev) =>
@@ -129,9 +156,19 @@ export function ListOfProjectsSegment({ boards }: ListOfProjectsSegmentProps) {
   }, []);
 
   const removeMember = useCallback((memberId: string) => {
-    setMembers((prev) => prev.filter((m) => m.id !== memberId));
-    if (openMemberId === memberId) setOpenMemberId(null);
-  }, [openMemberId]);
+    const member = members.find((m) => m.id === memberId);
+    setConfirm({
+      open: true,
+      title: 'Remove member?',
+      message: `Remove "${member?.name ?? 'this member'}" from the list? Their projects will no longer be shown.`,
+      variant: 'danger',
+      onConfirm: () => {
+        setMembers((prev) => prev.filter((m) => m.id !== memberId));
+        if (openMemberId === memberId) setOpenMemberId(null);
+        setConfirm((c) => ({ ...c, open: false }));
+      },
+    });
+  }, [members, openMemberId]);
 
   // Pie chart: distribution by member (segment size = number of projects they handle)
   const pieData = members
@@ -267,6 +304,17 @@ export function ListOfProjectsSegment({ boards }: ListOfProjectsSegmentProps) {
           </ul>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirm.open}
+        title={confirm.title}
+        message={confirm.message}
+        variant={confirm.variant}
+        confirmLabel="Confirm"
+        cancelLabel="Cancel"
+        onConfirm={confirm.onConfirm}
+        onCancel={() => setConfirm((c) => ({ ...c, open: false }))}
+      />
     </section>
   );
 }
