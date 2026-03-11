@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { priorityLabels, priorityOrder, statusLabels, statusOrder } from '@/lib/mock-data/boards';
 import { loadBoardById, saveBoardAsync } from '@/lib/utils/board-storage';
 import { formatDate, getMember } from '@/lib/utils/board';
@@ -396,13 +396,38 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
     }
   }, [boardId, board]);
 
+  // Keep latest board in ref so we can save on page hide/refresh
+  const boardRef = useRef<Board | null>(board);
+  boardRef.current = board ?? null;
+
   useEffect(() => {
     if (!board || readOnly) return;
     const t = setTimeout(() => {
       saveBoardAsync(board);
-    }, 800);
+    }, 400);
     return () => clearTimeout(t);
   }, [board, readOnly]);
+
+  // Save to Supabase when user leaves tab or refreshes, so data persists after deploy/refresh
+  useEffect(() => {
+    const saveOnHide = () => {
+      if (boardRef.current && !readOnly) {
+        void saveBoardAsync(boardRef.current);
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') saveOnHide();
+    };
+    const onBeforeUnload = () => {
+      saveOnHide();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+    };
+  }, [readOnly]);
 
   const visibleGroups = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
