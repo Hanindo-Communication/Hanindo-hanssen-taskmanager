@@ -1,0 +1,7 @@
+.hint {
+  margin: 0;
+  padding: 10px 0 0;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}

@@ -6,7 +6,9 @@ import { loadBoardById, saveBoardAsync } from '@/lib/utils/board-storage';
 import { formatDate, getMember } from '@/lib/utils/board';
 import { useWorkspaceRole } from '@/lib/contexts/WorkspaceRoleContext';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import type { Board, TaskGroup, TaskItem, TaskPriority, TaskStatus, ViewMode } from '@/lib/types/board';
+import { createClient } from '@/lib/supabase/client';
+import type { Board, HistoryLogEntry, TaskGroup, TaskItem, TaskPriority, TaskStatus, ViewMode } from '@/lib/types/board';
+import { ContextualHint } from '@/components/overview/ContextualHint';
 import styles from './board-client.module.css';
 
 type ConfirmState = {
@@ -363,7 +365,18 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
     variant: 'default',
     onConfirm: () => {},
   });
+  const currentUserRef = useRef<string>('Someone');
   const viewMode: ViewMode = 'table';
+
+  useEffect(() => {
+    const supabase = createClient();
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const email = session?.user?.email;
+      const name = session?.user?.user_metadata?.name ?? session?.user?.user_metadata?.full_name;
+      currentUserRef.current = name && String(name).trim() ? String(name) : email ?? 'Someone';
+    });
+  }, []);
   const allTasks = useMemo(() => board?.groups.flatMap((group) => group.tasks) ?? [], [board]);
   const todayReference = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -513,35 +526,56 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   const detailTask = useMemo(() => allTasks.find((task) => task.id === detailTaskId) ?? null, [allTasks, detailTaskId]);
   const detailTaskGroup = detailTask ? taskGroupMap.get(detailTask.id) : null;
 
-  function updateCurrentBoard(updater: (currentBoard: Board) => Board) {
-    setBoard((currentBoard) => (currentBoard ? updater(currentBoard) : currentBoard));
+  function updateCurrentBoard(updater: (currentBoard: Board) => Board, logEntry?: { action: string; details?: string }) {
+    const actor = currentUserRef.current;
+    setBoard((currentBoard) => {
+      if (!currentBoard) return currentBoard;
+      const next = updater(currentBoard);
+      if (readOnly || !logEntry) return next;
+      const log: HistoryLogEntry = {
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        actor,
+        action: logEntry.action,
+        details: logEntry.details,
+      };
+      return { ...next, historyLogs: [...(next.historyLogs ?? []), log] };
+    });
   }
 
   function handleTaskChange(taskId: string, updates: Partial<TaskItem>) {
-    updateCurrentBoard((currentBoard) =>
-      updateTask(currentBoard, taskId, (task) => ({
-        ...task,
-        ...updates,
-      })),
+    const taskName = allTasks.find((t) => t.id === taskId)?.name ?? 'Task';
+    updateCurrentBoard(
+      (currentBoard) =>
+        updateTask(currentBoard, taskId, (task) => ({
+          ...task,
+          ...updates,
+        })),
+      { action: 'Updated task', details: taskName }
     );
   }
 
   function handleGroupChange(groupId: string, updates: Partial<TaskGroup>) {
-    updateCurrentBoard((currentBoard) =>
-      updateGroup(currentBoard, groupId, (group) => ({
-        ...group,
-        ...updates,
-      })),
+    const groupName = board?.groups.find((g) => g.id === groupId)?.name ?? 'Segment';
+    updateCurrentBoard(
+      (currentBoard) =>
+        updateGroup(currentBoard, groupId, (group) => ({
+          ...group,
+          ...updates,
+        })),
+      { action: 'Updated segment', details: groupName }
     );
   }
 
   function handleMemberChange(memberId: string, name: string) {
-    updateCurrentBoard((currentBoard) =>
-      updateMember(currentBoard, memberId, (member) => ({
-        ...member,
-        name,
-        initials: getInitials(name) || member.initials,
-      })),
+    updateCurrentBoard(
+      (currentBoard) =>
+        updateMember(currentBoard, memberId, (member) => ({
+          ...member,
+          name,
+          initials: getInitials(name) || member.initials,
+        })),
+      { action: 'Renamed member', details: name }
     );
   }
 
@@ -550,7 +584,7 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
       updateMember(currentBoard, memberId, (member) => ({
         ...member,
         color,
-      })),
+      }))
     );
   }
 
@@ -558,33 +592,40 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
     updateCurrentBoard((currentBoard) => ({
       ...currentBoard,
       members: [...currentBoard.members, buildNewMember(currentBoard.members.length)],
-    }));
+    }), { action: 'Added board member' });
   }
 
   function handleRemoveMember(memberId: string) {
     setAssigneeFilter((current) => (current === memberId ? 'all' : current));
-    updateCurrentBoard((currentBoard) => ({
-      ...currentBoard,
-      members: currentBoard.members.filter((member) => member.id !== memberId),
-      groups: currentBoard.groups.map((group) => ({
-        ...group,
-        tasks: group.tasks.map((task) =>
-          task.assigneeId === memberId
-            ? {
-                ...task,
-                assigneeId: '',
-              }
-            : task,
-        ),
-      })),
-    }));
+    const memberName = board?.members.find((m) => m.id === memberId)?.name ?? 'Member';
+    updateCurrentBoard(
+      (currentBoard) => ({
+        ...currentBoard,
+        members: currentBoard.members.filter((member) => member.id !== memberId),
+        groups: currentBoard.groups.map((group) => ({
+          ...group,
+tasks: group.tasks.map((task) =>
+            task.assigneeId === memberId
+              ? {
+                  ...task,
+                  assigneeId: '',
+                }
+              : task,
+          ),
+        })),
+      }),
+      { action: 'Removed board member', details: memberName }
+    );
   }
 
   function handleBoardTextChange(updates: Pick<Board, 'name' | 'description'>) {
-    updateCurrentBoard((currentBoard) => ({
-      ...currentBoard,
-      ...updates,
-    }));
+    updateCurrentBoard(
+      (currentBoard) => ({
+        ...currentBoard,
+        ...updates,
+      }),
+      updates.name ? { action: 'Updated board name', details: updates.name } : { action: 'Updated board description' }
+    );
   }
 
   function handleDeleteTask(taskId: string) {
@@ -594,9 +635,13 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
       message: 'This task will be removed. This action cannot be undone.',
       variant: 'danger',
       onConfirm: () => {
+        const taskName = allTasks.find((t) => t.id === taskId)?.name ?? 'Task';
         setSelectedTaskIds((current) => current.filter((id) => id !== taskId));
         setDetailTaskId((current) => (current === taskId ? null : current));
-        updateCurrentBoard((currentBoard) => deleteTask(currentBoard, taskId));
+        updateCurrentBoard((currentBoard) => deleteTask(currentBoard, taskId), {
+          action: 'Deleted task',
+          details: taskName,
+        });
         setConfirm((c) => ({ ...c, open: false }));
       },
     });
@@ -619,17 +664,25 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
           delete next[groupId];
           return next;
         });
-        updateCurrentBoard((currentBoard) => deleteGroup(currentBoard, groupId));
+        updateCurrentBoard((currentBoard) => deleteGroup(currentBoard, groupId), {
+          action: 'Deleted segment',
+          details: group?.name ?? 'Segment',
+        });
         setConfirm((c) => ({ ...c, open: false }));
       },
     });
   }
 
   function handleMoveGroup(groupId: string, direction: 'up' | 'down') {
-    updateCurrentBoard((currentBoard) => moveGroup(currentBoard, groupId, direction));
+    const groupName = board?.groups.find((g) => g.id === groupId)?.name ?? 'Segment';
+    updateCurrentBoard((currentBoard) => moveGroup(currentBoard, groupId, direction), {
+      action: 'Moved segment',
+      details: `${groupName} ${direction === 'up' ? 'up' : 'down'}`,
+    });
   }
 
   function handleAddTask(groupId: string) {
+    const groupName = board?.groups.find((g) => g.id === groupId)?.name ?? 'Segment';
     updateCurrentBoard((currentBoard) => ({
       ...currentBoard,
       groups: currentBoard.groups.map((group) =>
@@ -640,7 +693,7 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
             }
           : group,
       ),
-    }));
+    }), { action: 'Added task', details: groupName });
   }
 
   function toggleGroup(groupId: string) {
@@ -689,34 +742,36 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   }
 
   function applyBulkStatus(status: TaskStatus) {
-    updateCurrentBoard((currentBoard) => {
-      let nextBoard = currentBoard;
-
-      selectedTaskIds.forEach((taskId) => {
-        nextBoard = updateTaskStatus(nextBoard, taskId, status);
-      });
-
-      return nextBoard;
-    });
+    updateCurrentBoard(
+      (currentBoard) => {
+        let nextBoard = currentBoard;
+        selectedTaskIds.forEach((taskId) => {
+          nextBoard = updateTaskStatus(nextBoard, taskId, status);
+        });
+        return nextBoard;
+      },
+      { action: 'Bulk status change', details: `${selectedCount} task(s) → ${statusLabels[status]}` }
+    );
   }
 
   function applyBulkMove(targetGroupId: string) {
-    updateCurrentBoard((currentBoard) => {
-      let nextBoard = currentBoard;
-
-      selectedTaskIds.forEach((taskId) => {
-        nextBoard = moveTaskBetweenGroups(nextBoard, taskId, targetGroupId);
-      });
-
-      return nextBoard;
-    });
+    const targetName = board?.groups.find((g) => g.id === targetGroupId)?.name ?? 'segment';
+    updateCurrentBoard(
+      (currentBoard) => {
+        let nextBoard = currentBoard;
+        selectedTaskIds.forEach((taskId) => {
+          nextBoard = moveTaskBetweenGroups(nextBoard, taskId, targetGroupId);
+        });
+        return nextBoard;
+      },
+      { action: 'Bulk move', details: `${selectedCount} task(s) → ${targetName}` }
+    );
   }
 
   function handleTableDrop(targetGroupId: string, targetTaskId?: string) {
-    if (!dragState) {
-      return;
-    }
-
+    if (!dragState) return;
+    const taskName = getTaskLocation(board!, dragState.taskId)?.task.name ?? 'Task';
+    const targetName = board?.groups.find((g) => g.id === targetGroupId)?.name ?? 'segment';
     updateCurrentBoard((currentBoard) => {
       const targetGroup = currentBoard.groups.find((group) => group.id === targetGroupId);
 
@@ -733,35 +788,32 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
         targetGroupId,
         nextIndex >= 0 ? nextIndex : undefined,
       );
-    });
+    }, { action: 'Moved task', details: `${taskName} → ${targetName}` });
 
     clearDragState();
   }
 
   function handleKanbanDrop(targetStatus: TaskStatus, targetTaskId?: string) {
-    if (!dragState) {
-      return;
-    }
-
-    updateCurrentBoard((currentBoard) => {
-      let nextBoard = currentBoard;
-
-      if (targetTaskId && targetTaskId !== dragState.taskId) {
-        const targetLocation = getTaskLocation(currentBoard, targetTaskId);
-
-        if (targetLocation) {
-          nextBoard = moveTaskBetweenGroups(
-            currentBoard,
-            dragState.taskId,
-            targetLocation.groupId,
-            targetLocation.index,
-          );
+    if (!dragState) return;
+    const taskName = getTaskLocation(board!, dragState.taskId)?.task.name ?? 'Task';
+    updateCurrentBoard(
+      (currentBoard) => {
+        let nextBoard = currentBoard;
+        if (targetTaskId && targetTaskId !== dragState.taskId) {
+          const targetLocation = getTaskLocation(currentBoard, targetTaskId);
+          if (targetLocation) {
+            nextBoard = moveTaskBetweenGroups(
+              currentBoard,
+              dragState.taskId,
+              targetLocation.groupId,
+              targetLocation.index,
+            );
+          }
         }
-      }
-
-      return updateTaskStatus(nextBoard, dragState.taskId, targetStatus);
-    });
-
+        return updateTaskStatus(nextBoard, dragState.taskId, targetStatus);
+      },
+      { action: 'Changed status', details: `${taskName} → ${statusLabels[targetStatus]}` }
+    );
     clearDragState();
   }
 
@@ -863,6 +915,8 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
           </button>
         </div>
       </div>
+
+      <ContextualHint boards={board ? [board] : []} activeBoardId={boardId} />
 
       <div className={styles.analyticsGrid}>
         <article className={styles.insightCard}>
@@ -1600,6 +1654,38 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
           ))}
         </div>
       )}
+
+      <article id="history-logs" className={`${styles.insightCard} ${styles.insightCardFull}`}>
+        <div className={styles.insightCardHead}>
+          <div>
+            <p className={styles.metricLabel}>History logs</p>
+            <strong className={styles.insightTitle}>Perubahan oleh user</strong>
+          </div>
+        </div>
+        <div className={styles.historyLogList}>
+          {(board.historyLogs ?? []).length === 0 ? (
+            <p className={styles.historyLogEmpty}>Belum ada riwayat perubahan.</p>
+          ) : (
+            [...(board.historyLogs ?? [])]
+              .reverse()
+              .map((entry) => (
+                <div key={entry.id} className={styles.historyLogRow}>
+                  <span className={styles.historyLogTime}>
+                    {new Date(entry.timestamp).toLocaleString('id-ID', {
+                      dateStyle: 'short',
+                      timeStyle: 'short',
+                    })}
+                  </span>
+                  <span className={styles.historyLogActor}>{entry.actor}</span>
+                  <span className={styles.historyLogAction}>{entry.action}</span>
+                  {entry.details ? (
+                    <span className={styles.historyLogDetails}>{entry.details}</span>
+                  ) : null}
+                </div>
+              ))
+          )}
+        </div>
+      </article>
 
       {detailTask ? (
         <div className={styles.detailOverlay} onClick={() => setDetailTaskId(null)} role="presentation">

@@ -24,6 +24,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { MemberRole } from '@/lib/types/board';
+import { getTimeBasedGreeting, getDisplayName } from '@/lib/utils/greeting';
 import styles from './app-shell.module.css';
 
 type ConfirmState = {
@@ -65,6 +66,7 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
   const [user, setUser] = useState<User | null>(null);
   const [openDropdownBoardId, setOpenDropdownBoardId] = useState<string | null>(null);
   const [isFavoritesEditMode, setIsFavoritesEditMode] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [confirm, setConfirm] = useState<ConfirmState>({
     open: false,
     title: '',
@@ -209,29 +211,70 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
 
   return (
     <WorkspaceRoleProvider role={userRole}>
-    <div className={styles.shell}>
-      <aside className={styles.sidebar}>
+    <div className={`${styles.shell} ${isSidebarCollapsed ? styles.sidebarCollapsedShell : ''}`}>
+      <aside className={`${styles.sidebar} ${isSidebarCollapsed ? styles.sidebarCollapsed : ''}`} aria-label="Sidebar navigation">
         <div className={styles.brandBlock}>
           <div className={styles.brandIcon}>TM</div>
-          <div>
-            <p className={styles.brandEyebrow}>Workspace</p>
-            <h1 className={styles.brandTitle}>{workspaceTitle}</h1>
-          </div>
+          {!isSidebarCollapsed && (
+            <div className={styles.brandText}>
+              <p className={styles.brandEyebrow}>Workspace</p>
+              <h1 className={styles.brandTitle}>{workspaceTitle}</h1>
+            </div>
+          )}
+          <button
+            type="button"
+            className={styles.sidebarToggle}
+            onClick={() => setIsSidebarCollapsed((v) => !v)}
+            aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
+            title={isSidebarCollapsed ? 'Expand sidebar' : 'Minimize sidebar'}
+          >
+            {isSidebarCollapsed ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            )}
+          </button>
         </div>
 
         <div className={styles.sidebarSection}>
-          <div className={styles.sectionHeader}>
-            <p className={styles.sectionLabel}>Favorites</p>
-            {canEdit && (
-              <button
-                type="button"
-                className={styles.sectionActionButton}
-                onClick={() => setIsFavoritesEditMode((current) => !current)}
-              >
-                {isFavoritesEditMode ? 'Done' : 'Edit'}
-              </button>
-            )}
-          </div>
+          {!isSidebarCollapsed && (
+            <div className={styles.sectionHeader}>
+              <p className={styles.sectionLabel}>Favorites</p>
+              {canEdit && (
+                <button
+                  type="button"
+                  className={styles.sectionActionButton}
+                  onClick={() => setIsFavoritesEditMode((current) => !current)}
+                >
+                  {isFavoritesEditMode ? 'Done' : 'Edit'}
+                </button>
+              )}
+            </div>
+          )}
+          {isSidebarCollapsed ? (
+            <>
+              <Link className={`${styles.navItemIcon} ${activeSection === 'overview' ? styles.navItemActive : ''}`} href="/" title="Overview" aria-label="Overview">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>
+              </Link>
+              <Link className={`${styles.navItemIcon} ${activeSection === 'settings' ? styles.navItemActive : ''}`} href="/settings" title="Settings" aria-label="Settings">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+              </Link>
+              <Link className={`${styles.navItemIcon} ${activeSection === 'report-generator' ? styles.navItemActive : ''}`} href="/report-generator" title="Report Generator" aria-label="Report Generator">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
+              </Link>
+              <Link className={`${styles.navItemIcon} ${activeSection === 'chat-generator' ? styles.navItemActive : ''}`} href="/chat-generator" title="Mbah Dukun" aria-label="Mbah Dukun">
+                <span className={styles.navIconEmoji} aria-hidden="true">👵</span>
+              </Link>
+              <div className={styles.sectionIconLabel} title="Favorites">
+                <span className={styles.sectionIcon} aria-hidden="true">★</span>
+              </div>
+            </>
+          ) : (
+            <>
           <Link
             className={`${styles.navItem} ${activeSection === 'overview' ? styles.navItemActive : ''}`}
             href="/"
@@ -254,9 +297,24 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
             className={`${styles.navItem} ${activeSection === 'chat-generator' ? styles.navItemActive : ''}`}
             href="/chat-generator"
           >
-            Chat Generator
+            👵 Mbah Dukun
           </Link>
-          {boards
+            </>
+          )}
+          {isSidebarCollapsed
+            ? boards.filter((board) => board.favorites).map((board) => (
+                <Link
+                  key={board.id}
+                  href={`/boards/${board.id}`}
+                  className={`${styles.navItemPill} ${activeBoardId === board.id ? styles.navItemActive : ''}`}
+                  title={board.name}
+                  aria-label={board.name}
+                >
+                  {board.name.slice(0, 1).toUpperCase()}
+                </Link>
+              ))
+            : null}
+          {!isSidebarCollapsed && boards
             .filter((board) => board.favorites)
             .map((board) =>
               isFavoritesEditMode ? (
@@ -349,6 +407,25 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
         </div>
 
         <div className={styles.sidebarSection}>
+          {isSidebarCollapsed ? (
+            <>
+              <div className={styles.sectionIconLabel} title="Programs/Projects">
+                <span className={styles.sectionIcon} aria-hidden="true">📁</span>
+              </div>
+              {boards.map((board) => (
+                <Link
+                  key={board.id}
+                  href={`/boards/${board.id}`}
+                  className={`${styles.navItemPill} ${activeBoardId === board.id ? styles.navItemActive : ''}`}
+                  title={board.name}
+                  aria-label={board.name}
+                >
+                  {board.name.slice(0, 1).toUpperCase()}
+                </Link>
+              ))}
+            </>
+          ) : (
+            <>
           <div className={styles.sectionHeader}>
             <p className={styles.sectionLabel}>Programs/Projects</p>
             {canEdit && (
@@ -435,8 +512,11 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
               </div>
             ),
           )}
+            </>
+          )}
         </div>
 
+        {!isSidebarCollapsed && (
         <div className={styles.sidebarFooter}>
           <div className={styles.teamCard}>
             <p className={styles.teamLabel}>This week</p>
@@ -444,13 +524,17 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
             <span>All boards running from local demo data.</span>
           </div>
         </div>
+        )}
       </aside>
 
       <div className={styles.contentArea}>
         <header className={styles.topbar}>
           <div>
             <p className={styles.topbarLabel}>Collaborative workspace</p>
-            <strong className={styles.topbarTitle}>Manage projects with clarity</strong>
+            <strong className={styles.topbarTitle}>
+              {getTimeBasedGreeting()}
+              {user ? (getDisplayName(user) ? `, ${getDisplayName(user)}` : '!') : '!'}
+            </strong>
           </div>
 
           <div className={styles.topbarActions}>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { getBoards } from '@/lib/utils/board';
 import { loadBoards, mergeBoards, BOARD_STORAGE_EVENT } from '@/lib/utils/board-storage';
 import { ListOfProjectsSegment } from '@/components/overview/ListOfProjectsSegment';
+import { ContextualHint } from '@/components/overview/ContextualHint';
 import type { Board } from '@/lib/types/board';
 import styles from '@/components/board/board-client.module.css';
 
@@ -45,6 +46,7 @@ export function OverviewContent() {
           ))}
         </div>
       </section>
+      <ContextualHint boards={boards} />
       <ListOfProjectsSegment boards={boards} />
     </>
   );

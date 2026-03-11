@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { getTimeBasedGreetingEn } from '@/lib/utils/greeting';
 import styles from './welcome.module.css';
 
 const WELCOME_STORAGE_KEY = 'task-manager.welcomeName';
@@ -69,7 +70,7 @@ export default function WelcomePage() {
   return (
     <div className={styles.wrap}>
       <div className={styles.banner}>
-        <h1 className={styles.title}>Welcome, {name}</h1>
+        <h1 className={styles.title}>{getTimeBasedGreetingEn()}, {name}</h1>
         <p className={styles.sub}>Taking you to your workspace…</p>
       </div>
     </div>

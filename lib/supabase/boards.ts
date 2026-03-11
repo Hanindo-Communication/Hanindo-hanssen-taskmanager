@@ -6,6 +6,7 @@ import { defaultBoardId } from '@/lib/mock-data/boards';
 import type {
   Board,
   BoardMember,
+  HistoryLogEntry,
   TaskGroup,
   TaskItem,
   TaskPriority,
@@ -21,6 +22,7 @@ type RowBoard = {
   completion_rate: number;
   due_this_week: number;
   active_automations: number;
+  history_logs?: unknown;
 };
 
 type RowBoardMember = {
@@ -89,6 +91,10 @@ function rowToBoard(
       };
     });
 
+  const historyLogs = Array.isArray(row.history_logs)
+  ? (row.history_logs as HistoryLogEntry[])
+  : [];
+
   return {
     id: row.id,
     name: row.name,
@@ -102,6 +108,7 @@ function rowToBoard(
       dueThisWeek: row.due_this_week,
       activeAutomations: row.active_automations,
     },
+    historyLogs,
   };
 }
 
@@ -204,6 +211,7 @@ export async function saveBoardToSupabase(board: Board): Promise<void> {
         completion_rate: board.stats.completionRate,
         due_this_week: board.stats.dueThisWeek,
         active_automations: board.stats.activeAutomations,
+        history_logs: board.historyLogs ?? [],
       },
       { onConflict: 'id' }
     );

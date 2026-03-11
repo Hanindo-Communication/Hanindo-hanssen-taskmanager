@@ -3,13 +3,11 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background:
-    linear-gradient(180deg, rgb(var(--panel-rgb) / 0.25), rgb(var(--brand-rgb) / 0.2), rgb(var(--brand-strong-rgb) / 0.35)),
-    url("/ocean-bg.png");
+  /* Sama seperti sign-in: pantai (Clear Blue Shore), 3840px */
+  background: url("/login-bg.jpg") center center no-repeat;
   background-attachment: fixed;
-  background-position: center top;
-  background-repeat: no-repeat;
   background-size: cover;
+  background-color: #1e3a5a;
 }
 
 .banner {

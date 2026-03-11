@@ -14,6 +14,13 @@ const EMAIL_TO_NAME: Record<string, string> = {
   'vira@hanindo.co.id': 'Vira',
 };
 
+const MOOD_OPTIONS = [
+  { id: 'senang', label: 'Senang', emoji: '😊' },
+  { id: 'sakit', label: 'Sakit', emoji: '🤒' },
+  { id: 'sedih', label: 'Sedih', emoji: '😢' },
+  { id: 'ngantuk', label: 'Ngantuk', emoji: '😴' },
+] as const;
+
 function getDisplayName(email: string): string {
   const key = email.trim().toLowerCase();
   const beforeAt = key.split('@')[0] ?? '';
@@ -24,6 +31,7 @@ function getDisplayName(email: string): string {
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [mood, setMood] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -52,55 +60,90 @@ export default function LoginPage() {
 
     if (data.session) {
       sessionStorage.setItem(WELCOME_STORAGE_KEY, getDisplayName(email.trim()));
+      if (mood) sessionStorage.setItem('task-manager.mood', mood);
       window.location.href = '/welcome';
     }
   }
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.card}>
-        <div className={styles.brand}>
-          <span className={styles.brandIcon}>TM</span>
-          <h1 className={styles.title}>Task Manager</h1>
-          <p className={styles.subtitle}>Sign in with your workspace email</p>
-        </div>
+      <div className={styles.layout}>
+        {/* Left: Welcome + motivasi */}
+        <section className={styles.left}>
+          <h1 className={styles.welcomeTitle}>Welcome!</h1>
+          <div className={styles.separator} />
+          <div className={styles.motivasiWrap}>
+            <p className={styles.motivasi}>
+              Mulai hari dengan fokus. Satu tugas yang selesai hari ini lebih berharga dari seratus rencana besok.
+            </p>
+            <p className={styles.motivasi}>
+              Kerja berkualitas lahir dari langkah kecil yang konsisten. Kamu bisa.
+            </p>
+          </div>
+          <a href="/" className={styles.learnMore}>Learn More</a>
+        </section>
 
-        <form className={styles.form} onSubmit={handleSubmit}>
-          {error ? (
-            <div className={styles.error} role="alert">
-              {error}
+        {/* Right: Form card */}
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>Sign in</h2>
+          <div className={styles.separator} />
+
+          <form className={styles.form} onSubmit={handleSubmit}>
+            {error ? (
+              <div className={styles.error} role="alert">
+                {error}
+              </div>
+            ) : null}
+
+            <label className={styles.label}>
+              <span>Email</span>
+              <input
+                type="email"
+                autoComplete="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={styles.input}
+                placeholder="you@hanindo.co.id"
+                required
+              />
+            </label>
+
+            <label className={styles.label}>
+              <span>Password</span>
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={styles.input}
+                required
+              />
+            </label>
+
+            <div className={styles.moodSection}>
+              <p className={styles.moodLabel}>How&apos;s your mood today?</p>
+              <div className={styles.moodOptions} role="group" aria-label="Pilih mood">
+                {MOOD_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={styles.moodBtn}
+                    data-selected={mood === opt.id}
+                    onClick={() => setMood(mood === opt.id ? null : opt.id)}
+                    title={opt.label}
+                  >
+                    <span className={styles.moodEmoji}>{opt.emoji}</span>
+                    <span className={styles.moodText}>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : null}
 
-          <label className={styles.label}>
-            <span>Email</span>
-            <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={styles.input}
-              placeholder="you@hanindo.co.id"
-              required
-            />
-          </label>
-
-          <label className={styles.label}>
-            <span>Password</span>
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className={styles.input}
-              required
-            />
-          </label>
-
-          <button type="submit" className={styles.submit} disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+            <button type="submit" className={styles.submit} disabled={loading}>
+              {loading ? 'Signing in…' : 'Submit'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

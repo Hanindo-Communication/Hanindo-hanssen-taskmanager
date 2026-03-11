@@ -32,6 +32,14 @@ export type TaskGroup = {
   tasks: TaskItem[];
 };
 
+export type HistoryLogEntry = {
+  id: string;
+  timestamp: string;
+  actor: string;
+  action: string;
+  details?: string;
+};
+
 export type Board = {
   id: string;
   name: string;
@@ -45,4 +53,5 @@ export type Board = {
     dueThisWeek: number;
     activeAutomations: number;
   };
+  historyLogs?: HistoryLogEntry[];
 };
