@@ -309,6 +309,23 @@
   white-space: nowrap;
 }
 
+.sidebarBoardNameInput {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+}
+
+.sidebarBoardNameInput:focus {
+  outline: none;
+  border-color: var(--brand);
+}
+
 .navDot {
   width: 10px;
   height: 10px;
@@ -466,6 +483,41 @@
   border-radius: 999px;
   background: #fff;
   color: var(--text-primary);
+}
+
+.saveButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: 1px solid rgb(var(--brand-rgb) / 0.35);
+  border-radius: 999px;
+  background: rgb(var(--brand-rgb) / 0.08);
+  color: var(--brand-strong);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.12s ease, border-color 0.2s ease;
+}
+
+.saveButton:hover {
+  background: rgb(var(--brand-rgb) / 0.16);
+  border-color: rgb(var(--brand-rgb) / 0.5);
+}
+
+.saveButton:active {
+  transform: scale(0.96);
+}
+
+.saveButtonIcon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.saveButtonLabel {
+  min-width: 2.8em;
+  text-align: left;
 }
 
 .primaryButton {

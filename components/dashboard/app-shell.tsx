@@ -89,6 +89,7 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
     onConfirm: () => {},
   });
   const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; email: string; name: string; role: MemberRole }[]>([]);
+  const [saveFeedback, setSaveFeedback] = useState(false);
   const userRole: MemberRole | null = useMemo(() => {
     if (workspaceMembers.length === 0) return 'admin'; // first-time: allow full access to set up
     return getRoleForEmail(workspaceMembers, user?.email ?? undefined) ?? 'viewer';
@@ -108,6 +109,12 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
     } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!saveFeedback) return;
+    const t = setTimeout(() => setSaveFeedback(false), 1800);
+    return () => clearTimeout(t);
+  }, [saveFeedback]);
 
   useEffect(() => {
     function syncMembers() {
@@ -243,11 +250,26 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
     });
   }
 
+  function handleSidebarBoardNameBlur(board: Board, nextName: string) {
+    const trimmed = nextName.trim();
+    if (!trimmed || trimmed === board.name) return;
+    const updated = { ...board, name: trimmed };
+    saveBoardAsync(updated).catch(() => {});
+    setBoards((current) =>
+      current.map((b) => (b.id === board.id ? { ...b, name: trimmed } : b))
+    );
+  }
+
   async function handleSignOut() {
     const supabase = createClient();
     if (supabase) await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
+  }
+
+  function handleSaveClick() {
+    window.dispatchEvent(new CustomEvent('task-manager:save-request'));
+    setSaveFeedback(true);
   }
 
   function handleGenerateMotivation() {
@@ -385,7 +407,16 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
                 >
                   <span className={styles.navItemLink}>
                     <span className={styles.navDot} />
-                    <span className={styles.navItemLabel}>{board.name}</span>
+                    <input
+                      type="text"
+                      className={styles.sidebarBoardNameInput}
+                      defaultValue={board.name}
+                      onBlur={(e) => handleSidebarBoardNameBlur(board, e.currentTarget.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') e.currentTarget.blur();
+                      }}
+                      aria-label={`Edit board name ${board.name}`}
+                    />
                   </span>
                   <button
                     type="button"
@@ -507,7 +538,16 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
               >
                 <span className={styles.navItemLink}>
                   <span className={styles.workspacePill}>{board.workspace.slice(0, 1)}</span>
-                  <span className={styles.navItemLabel}>{board.name}</span>
+                  <input
+                    type="text"
+                    className={styles.sidebarBoardNameInput}
+                    defaultValue={board.name}
+                    onBlur={(e) => handleSidebarBoardNameBlur(board, e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                    aria-label={`Edit board name ${board.name}`}
+                  />
                 </span>
                 {canDeleteBoard && (
                   <button
@@ -605,6 +645,22 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
                 readOnly
               />
             </div>
+            {canEdit && (
+              <button
+                type="button"
+                className={styles.saveButton}
+                onClick={handleSaveClick}
+                aria-label="Save all changes"
+                title="Save all changes on this page"
+              >
+                <svg className={styles.saveButtonIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+                  <polyline points="17 21 17 13 7 13 7 21" />
+                  <polyline points="7 3 7 8 15 8" />
+                </svg>
+                <span className={styles.saveButtonLabel}>{saveFeedback ? 'Saved!' : 'Save'}</span>
+              </button>
+            )}
             {canEdit && (
               <button className={styles.primaryButton} type="button" onClick={openCreateBoardModal}>
                 New project

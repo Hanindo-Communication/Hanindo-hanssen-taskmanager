@@ -1,9 +1,16 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import type { Board } from '@/lib/types/board';
+import { workspaceTitle } from '@/lib/constants/workspace';
+import {
+  fetchOverviewMemberProjects,
+  saveOverviewMemberProjects,
+} from '@/lib/supabase/overview-member-projects';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import styles from './ListOfProjectsSegment.module.css';
+
+const SUPABASE_SAVE_DEBOUNCE_MS = 600;
 
 type ConfirmState = {
   open: boolean;
@@ -97,9 +104,36 @@ export function ListOfProjectsSegment({ boards }: ListOfProjectsSegmentProps) {
     variant: 'default',
     onConfirm: () => {},
   });
+  const saveToSupabaseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const membersRef = useRef(members);
+  membersRef.current = members;
+
+  // Load from Supabase on mount; fallback stays as initial state (localStorage or default)
+  useEffect(() => {
+    fetchOverviewMemberProjects(workspaceTitle).then((data) => {
+      if (data !== null) setMembers(data);
+    });
+  }, []);
+
+  // When user clicks topbar "Save" button, persist current members & projects to Supabase
+  useEffect(() => {
+    const handler = () => {
+      saveOverviewMemberProjects(workspaceTitle, membersRef.current).catch(() => {});
+    };
+    window.addEventListener('task-manager:save-request', handler);
+    return () => window.removeEventListener('task-manager:save-request', handler);
+  }, []);
 
   useEffect(() => {
     saveToStorage(members);
+    if (saveToSupabaseTimeoutRef.current) clearTimeout(saveToSupabaseTimeoutRef.current);
+    saveToSupabaseTimeoutRef.current = setTimeout(() => {
+      saveOverviewMemberProjects(workspaceTitle, members).catch(() => {});
+      saveToSupabaseTimeoutRef.current = null;
+    }, SUPABASE_SAVE_DEBOUNCE_MS);
+    return () => {
+      if (saveToSupabaseTimeoutRef.current) clearTimeout(saveToSupabaseTimeoutRef.current);
+    };
   }, [members]);
 
   const updateMember = useCallback((memberId: string, updater: (m: MemberWithProjects) => MemberWithProjects) => {
@@ -127,13 +161,13 @@ export function ListOfProjectsSegment({ boards }: ListOfProjectsSegmentProps) {
       message: `Remove "${projectName}" from ${member?.name ?? 'member'}'s list?`,
       variant: 'default',
       onConfirm: () => {
-        setMembers((prev) =>
-          prev.map((m) =>
-            m.id === memberId
-              ? { ...m, projects: m.projects.filter((_, i) => i !== index) }
-              : m
-          )
+        const next = members.map((m) =>
+          m.id === memberId
+            ? { ...m, projects: m.projects.filter((_, i) => i !== index) }
+            : m
         );
+        setMembers(next);
+        saveOverviewMemberProjects(workspaceTitle, next).catch(() => {});
         setConfirm((c) => ({ ...c, open: false }));
       },
     });
@@ -163,7 +197,9 @@ export function ListOfProjectsSegment({ boards }: ListOfProjectsSegmentProps) {
       message: `Remove "${member?.name ?? 'this member'}" from the list? Their projects will no longer be shown.`,
       variant: 'danger',
       onConfirm: () => {
-        setMembers((prev) => prev.filter((m) => m.id !== memberId));
+        const next = members.filter((m) => m.id !== memberId);
+        setMembers(next);
+        saveOverviewMemberProjects(workspaceTitle, next).catch(() => {});
         if (openMemberId === memberId) setOpenMemberId(null);
         setConfirm((c) => ({ ...c, open: false }));
       },

@@ -307,6 +307,7 @@ function EditableTextField({
           placeholder={placeholder}
           onChange={(event) => setDraft(event.target.value)}
           onFocus={() => setIsEditing(true)}
+          onBlur={handleConfirm}
           onKeyDown={handleKeyDown}
           onDoubleClick={onDoubleClick}
           aria-label={ariaLabel}
@@ -318,6 +319,7 @@ function EditableTextField({
           placeholder={placeholder}
           onChange={(event) => setDraft(event.target.value)}
           onFocus={() => setIsEditing(true)}
+          onBlur={handleConfirm}
           onKeyDown={handleKeyDown}
           onDoubleClick={onDoubleClick}
           aria-label={ariaLabel}
@@ -380,13 +382,9 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   const allTasks = useMemo(() => board?.groups.flatMap((group) => group.tasks) ?? [], [board]);
   const todayReference = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
+  // Always load from storage (Supabase + localStorage) so saved changes (e.g. new members) persist after refresh
   useEffect(() => {
     let cancelled = false;
-    if (initialBoard && initialBoard.id === boardId) {
-      setBoard(initialBoard);
-      setBoardLoading(false);
-      return;
-    }
     setBoardLoading(true);
     loadBoardById(boardId).then((loaded) => {
       if (!cancelled) {
@@ -447,6 +445,16 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
       window.removeEventListener('beforeunload', onBeforeUnload);
     };
   }, [boardId, readOnly]);
+
+  // When user clicks topbar "Save" button, persist current board to Supabase
+  useEffect(() => {
+    const handler = () => {
+      const b = boardRef.current;
+      if (b && !readOnly) saveBoardAsync(b);
+    };
+    window.addEventListener('task-manager:save-request', handler);
+    return () => window.removeEventListener('task-manager:save-request', handler);
+  }, [readOnly]);
 
   const visibleGroups = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -574,6 +582,13 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
   }
 
   function handleMemberChange(memberId: string, name: string) {
+    const nextBoard =
+      board &&
+      updateMember(board, memberId, (member) => ({
+        ...member,
+        name,
+        initials: getInitials(name) || member.initials,
+      }));
     updateCurrentBoard(
       (currentBoard) =>
         updateMember(currentBoard, memberId, (member) => ({
@@ -583,34 +598,57 @@ export function BoardClient({ initialBoard, boardId }: BoardClientProps) {
         })),
       { action: 'Renamed member', details: name }
     );
+    if (nextBoard) saveBoardAsync(nextBoard);
   }
 
   function handleMemberColorChange(memberId: string, color: string) {
+    const nextBoard =
+      board && updateMember(board, memberId, (member) => ({ ...member, color }));
     updateCurrentBoard((currentBoard) =>
       updateMember(currentBoard, memberId, (member) => ({
         ...member,
         color,
       }))
     );
+    if (nextBoard) saveBoardAsync(nextBoard);
   }
 
   function handleAddMember() {
+    const nextBoard = board
+      ? {
+          ...board,
+          members: [...board.members, buildNewMember(board.members.length)],
+        }
+      : null;
     updateCurrentBoard((currentBoard) => ({
       ...currentBoard,
       members: [...currentBoard.members, buildNewMember(currentBoard.members.length)],
     }), { action: 'Added board member' });
+    if (nextBoard) saveBoardAsync(nextBoard);
   }
 
   function handleRemoveMember(memberId: string) {
     setAssigneeFilter((current) => (current === memberId ? 'all' : current));
     const memberName = board?.members.find((m) => m.id === memberId)?.name ?? 'Member';
+    const nextBoard = board
+      ? {
+          ...board,
+          members: board.members.filter((member) => member.id !== memberId),
+          groups: board.groups.map((group) => ({
+            ...group,
+            tasks: group.tasks.map((task) =>
+              task.assigneeId === memberId ? { ...task, assigneeId: '' } : task
+            ),
+          })),
+        }
+      : null;
     updateCurrentBoard(
       (currentBoard) => ({
         ...currentBoard,
         members: currentBoard.members.filter((member) => member.id !== memberId),
         groups: currentBoard.groups.map((group) => ({
           ...group,
-tasks: group.tasks.map((task) =>
+          tasks: group.tasks.map((task) =>
             task.assigneeId === memberId
               ? {
                   ...task,
@@ -622,6 +660,7 @@ tasks: group.tasks.map((task) =>
       }),
       { action: 'Removed board member', details: memberName }
     );
+    if (nextBoard) saveBoardAsync(nextBoard);
   }
 
   function handleBoardTextChange(updates: Pick<Board, 'name' | 'description'>) {
@@ -644,10 +683,12 @@ tasks: group.tasks.map((task) =>
         const taskName = allTasks.find((t) => t.id === taskId)?.name ?? 'Task';
         setSelectedTaskIds((current) => current.filter((id) => id !== taskId));
         setDetailTaskId((current) => (current === taskId ? null : current));
+        const nextBoard = board ? deleteTask(board, taskId) : null;
         updateCurrentBoard((currentBoard) => deleteTask(currentBoard, taskId), {
           action: 'Deleted task',
           details: taskName,
         });
+        if (nextBoard) saveBoardAsync(nextBoard);
         setConfirm((c) => ({ ...c, open: false }));
       },
     });
@@ -670,10 +711,12 @@ tasks: group.tasks.map((task) =>
           delete next[groupId];
           return next;
         });
+        const nextBoard = board ? deleteGroup(board, groupId) : null;
         updateCurrentBoard((currentBoard) => deleteGroup(currentBoard, groupId), {
           action: 'Deleted segment',
           details: group?.name ?? 'Segment',
         });
+        if (nextBoard) saveBoardAsync(nextBoard);
         setConfirm((c) => ({ ...c, open: false }));
       },
     });

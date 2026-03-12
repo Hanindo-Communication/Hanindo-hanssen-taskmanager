@@ -189,30 +189,38 @@ export async function loadBoards(): Promise<Board[]> {
 
 export async function loadBoardById(boardId: string): Promise<Board | null> {
   if (typeof window === 'undefined') return null;
+  const fromLocal = getStoredBoardById(boardId);
   if (isSupabaseConfigured()) {
     try {
       const fromSupabase = await fetchBoardByIdFromSupabase(boardId);
+      // Prefer local when it has more members (user may have saved only to localStorage if Supabase failed)
+      if (fromSupabase && fromLocal && fromLocal.members.length > fromSupabase.members.length) {
+        return normalizeBoard(fromLocal);
+      }
       if (fromSupabase) return fromSupabase;
-      return getStoredBoardById(boardId) ?? null;
+      return fromLocal ? normalizeBoard(fromLocal) : null;
     } catch {
-      return getStoredBoardById(boardId) ?? null;
+      return fromLocal ? normalizeBoard(fromLocal) : null;
     }
   }
-  return getStoredBoardById(boardId) ?? null;
+  return fromLocal ? normalizeBoard(fromLocal) : null;
 }
 
 export async function saveBoardAsync(board: Board): Promise<void> {
   if (typeof window === 'undefined') return;
+  const normalized = normalizeBoard(board);
   if (isSupabaseConfigured()) {
     try {
-      await saveBoardToSupabase(board);
+      await saveBoardToSupabase(normalized);
     } catch {
-      saveBoard(board);
+      saveBoard(normalized);
     }
+    // Always update localStorage so load can use it if Supabase was stale or failed
+    saveBoard(normalized);
     dispatchBoardsUpdated();
     return;
   }
-  saveBoard(board);
+  saveBoard(normalized);
 }
 
 /** Mark a board as deleted so mergeBoards won't show it again (e.g. after Supabase delete). */
