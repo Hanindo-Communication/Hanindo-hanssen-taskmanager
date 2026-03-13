@@ -23,7 +23,7 @@
   --info-rgb: 74 158 180;
   --panel-rgb: 240 242 240;
   --shadow-panel: 0 24px 60px rgba(30, 58, 90, 0.18);
-  --font-sans: Inter, "Segoe UI", Arial, sans-serif;
+  --font-sans: var(--font-poppins), "Poppins", "Segoe UI", Arial, sans-serif;
 }
 
 * {

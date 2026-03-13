@@ -282,8 +282,8 @@
 .historyLogList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 280px;
+  gap: 10px;
+  max-height: 320px;
   overflow-y: auto;
 }
 
@@ -296,33 +296,45 @@
 
 .historyLogRow {
   display: grid;
-  grid-template-columns: 140px 120px 100px 1fr;
-  gap: 12px;
-  align-items: baseline;
-  padding: 10px 14px;
+  grid-template-columns: 120px minmax(100px, 1fr) minmax(80px, 0.9fr) minmax(0, 1.5fr);
+  gap: 16px;
+  align-items: start;
+  padding: 12px 16px;
   border-radius: 12px;
   background: rgb(var(--panel-rgb) / 0.88);
   border: 1px solid rgb(var(--brand-rgb) / 0.1);
   font-size: 0.88rem;
+  min-width: 0;
 }
 
 .historyLogTime {
   color: var(--text-soft);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .historyLogActor {
   font-weight: 600;
   color: var(--text-primary);
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .historyLogAction {
   color: var(--text-secondary);
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .historyLogDetails {
   color: var(--text-soft);
   font-size: 0.85rem;
+  min-width: 0;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .insightCardAccent {

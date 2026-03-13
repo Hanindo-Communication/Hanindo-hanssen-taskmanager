@@ -131,6 +131,11 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
   }, []);
 
   const orderedBoards = useMemo(() => sortBoardsByOrder(boards, projectOrder), [boards, projectOrder]);
+  /** Programs/Projects section: always show A–Z, never reorder on click */
+  const boardsAlphabetical = useMemo(
+    () => [...boards].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+    [boards]
+  );
 
   useEffect(() => {
     function syncMembers() {
@@ -550,14 +555,13 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
               <div className={styles.sectionIconLabel} title="Programs/Projects">
                 <span className={styles.sectionIcon} aria-hidden="true">📁</span>
               </div>
-              {orderedBoards.map((board) => (
+              {boardsAlphabetical.map((board) => (
                 <Link
                   key={board.id}
                   href={`/boards/${board.id}`}
                   className={`${styles.navItemPill} ${activeBoardId === board.id ? styles.navItemActive : ''}`}
                   title={board.name}
                   aria-label={board.name}
-                  onClick={() => moveBoardToTop(workspaceTitle, board.id)}
                 >
                   {board.name.slice(0, 1).toUpperCase()}
                 </Link>
@@ -577,7 +581,7 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
               </button>
             )}
           </div>
-          {orderedBoards.map((board) =>
+          {boardsAlphabetical.map((board) =>
             isProjectEditMode ? (
               <div
                 key={board.id}
@@ -628,7 +632,6 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
                 <Link
                   href={`/boards/${board.id}`}
                   className={styles.navItemLink}
-                  onClick={() => moveBoardToTop(workspaceTitle, board.id)}
                 >
                   <span className={styles.workspacePill}>{board.workspace.slice(0, 1)}</span>
                   <span className={styles.navItemLabel}>{board.name}</span>
@@ -648,20 +651,14 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
                     <Link
                       className={styles.navItemDropdownLink}
                       href={`/boards/${board.id}#manage-team-roster`}
-                      onClick={() => {
-                        setOpenDropdownBoardId(null);
-                        moveBoardToTop(workspaceTitle, board.id);
-                      }}
+                      onClick={() => setOpenDropdownBoardId(null)}
                     >
                       Team roster
                     </Link>
                     <Link
                       className={styles.navItemDropdownLink}
                       href={`/boards/${board.id}#list-of-tasks`}
-                      onClick={() => {
-                        setOpenDropdownBoardId(null);
-                        moveBoardToTop(workspaceTitle, board.id);
-                      }}
+                      onClick={() => setOpenDropdownBoardId(null)}
                     >
                       List of tasks
                     </Link>
