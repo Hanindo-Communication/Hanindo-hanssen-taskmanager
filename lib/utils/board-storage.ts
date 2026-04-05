@@ -237,7 +237,8 @@ export async function loadBoards(): Promise<Board[]> {
     try {
       const fromSupabase = await fetchBoardsFromSupabase();
       const fromLocal = loadStoredBoards();
-      return mergeBoards(fromSupabase, fromLocal);
+      // Second array wins in mergeBoards — prefer Supabase over local cache (same rule as workspace docs)
+      return mergeBoards(fromLocal, fromSupabase);
     } catch {
       return loadStoredBoards();
     }

@@ -60,19 +60,6 @@ type AppShellProps = {
   activeSection?: 'overview' | 'settings' | 'report-generator' | 'chat-generator';
 };
 
-const motivationQuotes = [
-  'One focused step today can unlock a calmer tomorrow. Keep moving.',
-  'You do not need perfect energy to make meaningful progress. Start with one task.',
-  'Small wins still count. Finish one thing, then build from there.',
-  'Your work matters. Show up, do the next right thing, and trust the process.',
-  'Discipline beats mood. A little consistency today becomes momentum tomorrow.',
-  'Take a breath, reset your mind, and attack the work with steady confidence.',
-  'You are closer than you think. Keep going until the task becomes a result.',
-  'Progress is made by people who continue even when it feels ordinary.',
-  'Do not wait for motivation to arrive. Action is what invites motivation in.',
-  'One clear task, one clean finish, one stronger version of you.',
-];
-
 export function AppShell({ children, activeBoardId, activeSection }: AppShellProps) {
   const router = useRouter();
   const staticBoards = useMemo(() => getBoards(), []);
@@ -80,8 +67,6 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
   const [isCreateBoardOpen, setIsCreateBoardOpen] = useState(false);
   const [isProjectEditMode, setIsProjectEditMode] = useState(false);
   const [newBoardName, setNewBoardName] = useState('');
-  const [isMotivationOpen, setIsMotivationOpen] = useState(false);
-  const [motivationQuote, setMotivationQuote] = useState(motivationQuotes[0]);
   const [user, setUser] = useState<User | null>(null);
   const [openDropdownBoardId, setOpenDropdownBoardId] = useState<string | null>(null);
   const [isFavoritesEditMode, setIsFavoritesEditMode] = useState(false);
@@ -164,7 +149,8 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
             } catch {}
           }
         }
-        setBoards((current) => mergeBoards(base, current));
+        // base = server + static; prefer base over prior React state so mock/ stale UI does not overwrite Supabase
+        setBoards((current) => mergeBoards(current, base));
       });
     }
 
@@ -291,24 +277,6 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
   function handleSaveClick() {
     window.dispatchEvent(new CustomEvent('task-manager:save-request'));
     setSaveFeedback(true);
-  }
-
-  function handleGenerateMotivation() {
-    if (isMotivationOpen) {
-      setIsMotivationOpen(false);
-      return;
-    }
-
-    setMotivationQuote((currentQuote) => {
-      const availableQuotes = motivationQuotes.filter((quote) => quote !== currentQuote);
-
-      if (availableQuotes.length === 0) {
-        return currentQuote;
-      }
-
-      return availableQuotes[Math.floor(Math.random() * availableQuotes.length)];
-    });
-    setIsMotivationOpen(true);
   }
 
   return (
@@ -808,37 +776,6 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
           onClose={() => setIsOrganizationOpen(false)}
         />
       )}
-
-      <div className={styles.motivationWidget}>
-        {isMotivationOpen ? (
-          <div className={styles.motivationBubble}>
-            <p className={styles.motivationLabel}>Random motivation</p>
-            <strong className={styles.motivationTitle}>Keep your spirit up</strong>
-            <p className={styles.motivationText}>{motivationQuote}</p>
-          </div>
-        ) : null}
-        <button
-          type="button"
-          className={styles.motivationButton}
-          onClick={handleGenerateMotivation}
-          aria-label={isMotivationOpen ? 'Hide motivation quote' : 'Show motivation quote'}
-          title={isMotivationOpen ? 'Hide motivation' : 'Show motivation'}
-        >
-          <span className={styles.motivationAvatar} aria-hidden="true">
-            <svg viewBox="0 0 96 96" className={styles.motivationAvatarArt}>
-              {/* Naruto: headband, spiky blonde hair, blue eyes, orange accent */}
-              <circle cx="48" cy="50" r="27" fill="#f5e6c8" />
-              <path d="M16 30 L48 20 L80 30 L76 40 L48 36 L20 40 Z" fill="#2c5282" stroke="#1a365d" strokeWidth="1.2" />
-              <path d="M24 26 L26 12 L32 22 L40 10 L48 20 L56 10 L64 22 L70 12 L72 26 L66 32 L48 30 L30 32 Z" fill="#f4d03f" stroke="#e5c23a" strokeWidth="0.8" />
-              <path d="M30 64c5 6 13 10 18 10s13-4 18-10l5 16H25l5-16Z" fill="#e67e22" />
-              <ellipse cx="35" cy="48" rx="4" ry="5" fill="#3498db" />
-              <ellipse cx="61" cy="48" rx="4" ry="5" fill="#3498db" />
-              <path d="M36 58c3 5 12 5 15 0" stroke="#2c3e50" strokeWidth="1.8" strokeLinecap="round" />
-              <path d="M39 58c1.5 4 8 4 9.5 0" stroke="#f5e6c8" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          </span>
-        </button>
-      </div>
     </div>
     </WorkspaceRoleProvider>
   );
