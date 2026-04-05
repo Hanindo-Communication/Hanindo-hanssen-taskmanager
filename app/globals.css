@@ -60,3 +60,14 @@ select,
 textarea {
   font: inherit;
 }
+
+/* Report Generator: print / Save as PDF — sembunyikan sidebar */
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  aside[aria-label="Sidebar navigation"] {
+    display: none !important;
+  }
+}

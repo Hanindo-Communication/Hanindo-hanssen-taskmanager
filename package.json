@@ -12,11 +12,13 @@
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.0",
     "next": "^16.0.0",
+    "papaparse": "^5.5.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",
+    "@types/papaparse": "^5.5.2",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "typescript": "~5.2.2"
