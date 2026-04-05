@@ -21,23 +21,28 @@ export type MetaAdRow = {
   reportingEnds: string;
 };
 
-export type TopAdEntry = {
-  adName: string;
+/** Aggregated metrics per ad set (summed across all ad rows in that set). */
+export type AdSetSummary = {
   adSetName: string;
-  campaignName: string;
-  scoreLabel: string;
-  scoreValue: number;
   spend: number;
-  impressions: number;
-  resultType: string;
+  results: number;
+  /**
+   * Selaras UI Meta: untuk dominant Reach = biaya per 1.000 orang jangkauan; selain itu = biaya per hasil.
+   */
+  costPerResult: number | null;
+  /** Result type with the highest spend within this ad set (for subtitle under Results). */
+  dominantResultType: string;
 };
 
-export type TopAdSetEntry = {
-  name: string;
-  spend: number;
-  impressions: number;
-  linkClicks: number;
-  cpm: number | null;
+export type AdSetRankings = {
+  /** CPR terendah (paling efisien) */
+  bestCpr: AdSetSummary[];
+  /** Volume hasil tertinggi */
+  mostResults: AdSetSummary[];
+  /** CPR tertinggi (paling mahal), min. spending untuk mengurangi noise */
+  worstCpr: AdSetSummary[];
+  /** Hasil terendah (dengan spending berarti) */
+  fewestResults: AdSetSummary[];
 };
 
 export type SpendBucket = {
@@ -52,16 +57,15 @@ export type ReportSummary = {
   rowCount: number;
   totalSpendIdr: number;
   totalImpressions: number;
-  totalLinkClicks: number;
-  overallCtr: number | null;
+  totalResultsSum: number;
+  blendedCostPerResult: number | null;
+  dominantResultType: string | null;
   overallCpm: number | null;
   maxReachSingleAd: number;
-  topReachAds: TopAdEntry[];
-  topMessagingAds: TopAdEntry[];
-  topEngagementAds: TopAdEntry[];
-  topAdSets: TopAdSetEntry[];
+  adSetRankings: AdSetRankings;
   spendByObjective: SpendBucket[];
-  executiveBullets: string[];
+  /** Catatan singkat untuk di bawah infographic (reach / agregasi). */
+  executiveFootnote: string;
 };
 
 const REQUIRED_HEADERS = [
@@ -71,6 +75,26 @@ const REQUIRED_HEADERS = [
   'amount spent (idr)',
   'impressions',
 ];
+
+const MIN_SPEND_IDR_NOISE = 5000;
+
+/**
+ * Selaras dengan kolom Meta "Cost per result" saat hasil = Reach: biaya per **1.000 orang**
+ * jangkauan (bukan per satu orang). Tanpa faktor 1000, spend/results jadi ~Rp 1–2 dan keliru.
+ */
+function metaAlignedCostPerResultIdr(
+  spend: number,
+  results: number,
+  dominantResultType: string
+): number | null {
+  if (results <= 0 || spend <= 0) return null;
+  const perSingleResultUnit = spend / results;
+  const t = dominantResultType.trim().toLowerCase();
+  if (t === 'reach') {
+    return perSingleResultUnit * 1000;
+  }
+  return perSingleResultUnit;
+}
 
 function normalizeHeader(h: string): string {
   return h.trim().toLowerCase();
@@ -162,6 +186,24 @@ function formatIdr(n: number): string {
   return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Math.round(n));
 }
 
+function dominantResultTypeBySpend(rows: MetaAdRow[]): string | null {
+  const map = new Map<string, number>();
+  for (const r of rows) {
+    const t = r.resultType?.trim();
+    if (!t) continue;
+    map.set(t, (map.get(t) ?? 0) + r.amountSpentIdr);
+  }
+  let best: string | null = null;
+  let bestSpend = 0;
+  for (const [t, s] of map) {
+    if (s > bestSpend) {
+      bestSpend = s;
+      best = t;
+    }
+  }
+  return best;
+}
+
 function campaignBucket(campaignName: string): string {
   const upper = campaignName.toUpperCase();
   if (upper.includes('AWARENESS')) return 'Awareness';
@@ -170,96 +212,80 @@ function campaignBucket(campaignName: string): string {
   return first.length > 24 ? `${first.slice(0, 24)}…` : first;
 }
 
-function pickTopReach(rows: MetaAdRow[]): TopAdEntry[] {
-  const candidates = rows.filter(
-    (r) =>
-      r.resultType.toLowerCase() === 'reach' &&
-      r.amountSpentIdr > 0 &&
-      r.results > 0
-  );
-  const scored = candidates.map((r) => {
-    const efficiency = r.results / r.amountSpentIdr;
-    return {
-      adName: r.adName,
-      adSetName: r.adSetName,
-      campaignName: r.campaignName,
-      scoreLabel: 'Hasil / biaya (reach per Rp)',
-      scoreValue: efficiency,
-      spend: r.amountSpentIdr,
-      impressions: r.impressions,
-      resultType: r.resultType,
-    };
-  });
-  scored.sort((a, b) => b.scoreValue - a.scoreValue);
-  return scored.slice(0, 3);
-}
-
-function pickTopMessaging(rows: MetaAdRow[]): TopAdEntry[] {
-  const rt = 'messaging conversations started';
-  const candidates = rows.filter(
-    (r) => r.resultType.toLowerCase() === rt && r.amountSpentIdr > 0 && r.results > 0
-  );
-  const scored = candidates.map((r) => {
-    const efficiency = r.results / r.amountSpentIdr;
-    return {
-      adName: r.adName,
-      adSetName: r.adSetName,
-      campaignName: r.campaignName,
-      scoreLabel: 'Percakapan / biaya',
-      scoreValue: efficiency,
-      spend: r.amountSpentIdr,
-      impressions: r.impressions,
-      resultType: r.resultType,
-    };
-  });
-  scored.sort((a, b) => b.scoreValue - a.scoreValue);
-  return scored.slice(0, 3);
-}
-
-const MIN_IMPRESSIONS_CTR = 800;
-const MIN_SPEND_IDR = 5000;
-
-function pickTopEngagement(rows: MetaAdRow[]): TopAdEntry[] {
-  const candidates = rows.filter(
-    (r) =>
-      r.impressions >= MIN_IMPRESSIONS_CTR &&
-      r.amountSpentIdr >= MIN_SPEND_IDR &&
-      r.ctrLink !== null &&
-      r.ctrLink > 0
-  );
-  const scored = candidates.map((r) => ({
-    adName: r.adName,
-    adSetName: r.adSetName,
-    campaignName: r.campaignName,
-    scoreLabel: 'CTR link',
-    scoreValue: r.ctrLink!,
-    spend: r.amountSpentIdr,
-    impressions: r.impressions,
-    resultType: r.resultType || '—',
-  }));
-  scored.sort((a, b) => b.scoreValue - a.scoreValue);
-  return scored.slice(0, 3);
-}
-
-function aggregateAdSets(rows: MetaAdRow[]): TopAdSetEntry[] {
-  const map = new Map<string, { spend: number; impressions: number; clicks: number }>();
+function aggregateAdSetSummaries(rows: MetaAdRow[]): AdSetSummary[] {
+  const map = new Map<string, { spend: number; results: number; typeSpend: Map<string, number> }>();
   for (const r of rows) {
-    const key = r.adSetName || '(Tanpa nama)';
-    const cur = map.get(key) ?? { spend: 0, impressions: 0, clicks: 0 };
+    const key = r.adSetName?.trim() || '(Tanpa nama)';
+    let cur = map.get(key);
+    if (!cur) {
+      cur = { spend: 0, results: 0, typeSpend: new Map() };
+      map.set(key, cur);
+    }
     cur.spend += r.amountSpentIdr;
-    cur.impressions += r.impressions;
-    cur.clicks += r.linkClicks;
-    map.set(key, cur);
+    cur.results += r.results;
+    const rt = r.resultType?.trim();
+    if (rt) {
+      cur.typeSpend.set(rt, (cur.typeSpend.get(rt) ?? 0) + r.amountSpentIdr);
+    }
   }
-  const list: TopAdSetEntry[] = Array.from(map.entries()).map(([name, v]) => ({
-    name,
-    spend: v.spend,
-    impressions: v.impressions,
-    linkClicks: v.clicks,
-    cpm: v.impressions > 0 ? (v.spend / v.impressions) * 1000 : null,
-  }));
-  list.sort((a, b) => b.spend - a.spend);
-  return list.slice(0, 3);
+
+  const out: AdSetSummary[] = [];
+  for (const [adSetName, v] of map) {
+    let dominant = '';
+    let maxS = 0;
+    for (const [t, s] of v.typeSpend) {
+      if (s > maxS) {
+        maxS = s;
+        dominant = t;
+      }
+    }
+    const dt = dominant || '—';
+    const costPerResult = metaAlignedCostPerResultIdr(v.spend, v.results, dt);
+    out.push({
+      adSetName,
+      spend: v.spend,
+      results: v.results,
+      costPerResult,
+      dominantResultType: dt,
+    });
+  }
+  return out;
+}
+
+function rankBestCpr(list: AdSetSummary[]): AdSetSummary[] {
+  const eligible = list.filter((a) => a.costPerResult !== null && a.results > 0);
+  eligible.sort((a, b) => a.costPerResult! - b.costPerResult!);
+  return eligible.slice(0, 3);
+}
+
+function rankMostResults(list: AdSetSummary[]): AdSetSummary[] {
+  const eligible = list.filter((a) => a.results > 0);
+  eligible.sort((a, b) => b.results - a.results);
+  return eligible.slice(0, 3);
+}
+
+function rankWorstCpr(list: AdSetSummary[]): AdSetSummary[] {
+  const eligible = list.filter(
+    (a) => a.costPerResult !== null && a.results > 0 && a.spend >= MIN_SPEND_IDR_NOISE
+  );
+  eligible.sort((a, b) => b.costPerResult! - a.costPerResult!);
+  return eligible.slice(0, 3);
+}
+
+function rankFewestResults(list: AdSetSummary[]): AdSetSummary[] {
+  let eligible = list.filter((a) => a.spend >= MIN_SPEND_IDR_NOISE);
+  eligible.sort((a, b) => {
+    if (a.results !== b.results) return a.results - b.results;
+    return b.spend - a.spend;
+  });
+  if (eligible.length === 0) {
+    eligible = list.filter((a) => a.spend > 0);
+    eligible.sort((a, b) => {
+      if (a.results !== b.results) return a.results - b.results;
+      return b.spend - a.spend;
+    });
+  }
+  return eligible.slice(0, 3);
 }
 
 function spendByCampaignBucket(rows: MetaAdRow[]): SpendBucket[] {
@@ -276,9 +302,6 @@ function spendByCampaignBucket(rows: MetaAdRow[]): SpendBucket[] {
 export function summarizeMetaRows(rows: MetaAdRow[]): ReportSummary {
   const totalSpendIdr = rows.reduce((s, r) => s + r.amountSpentIdr, 0);
   const totalImpressions = rows.reduce((s, r) => s + r.impressions, 0);
-  const totalLinkClicks = rows.reduce((s, r) => s + r.linkClicks, 0);
-  const overallCtr =
-    totalImpressions > 0 ? totalLinkClicks / totalImpressions : null;
   const overallCpm =
     totalImpressions > 0 ? (totalSpendIdr / totalImpressions) * 1000 : null;
   const maxReachSingleAd = rows.reduce((m, r) => Math.max(m, r.reach), 0);
@@ -295,29 +318,23 @@ export function summarizeMetaRows(rows: MetaAdRow[]): ReportSummary {
       ? `${reportingStarts} – ${reportingEnds}`
       : 'Periode dari file';
 
-  const topReachAds = pickTopReach(rows);
-  const topMessagingAds = pickTopMessaging(rows);
-  const topEngagementAds = pickTopEngagement(rows);
-  const topAdSets = aggregateAdSets(rows);
-  const spendByObjective = spendByCampaignBucket(rows);
+  const adSetList = aggregateAdSetSummaries(rows);
+  const adSetRankings: AdSetRankings = {
+    bestCpr: rankBestCpr(adSetList),
+    mostResults: rankMostResults(adSetList),
+    worstCpr: rankWorstCpr(adSetList),
+    fewestResults: rankFewestResults(adSetList),
+  };
 
-  const bullets: string[] = [
-    `Total investasi iklan dalam periode: Rp ${formatIdr(totalSpendIdr)}.`,
-    `Tayangan terkumpul ${formatIdr(totalImpressions)} dengan ${formatIdr(totalLinkClicks)} klik ke tautan${
-      overallCtr !== null ? ` (CTR gabungan ${(overallCtr * 100).toFixed(2)}%)` : ''
-    }.`,
-    `Reach tidak dijumlahkan antar iklan (untuk menghindari double counting); reach tertinggi satu iklan: ${formatIdr(maxReachSingleAd)}.`,
-  ];
-  if (topReachAds[0]) {
-    bullets.push(
-      `Iklan reach paling efisien (hasil dibanding biaya): “${topReachAds[0].adName}”.`
-    );
-  }
-  if (topAdSets[0]) {
-    bullets.push(
-      `Ad set dengan spend tertinggi: “${topAdSets[0].name}” (Rp ${formatIdr(topAdSets[0].spend)}).`
-    );
-  }
+  const spendByObjective = spendByCampaignBucket(rows);
+  const totalResultsSum = rows.reduce((s, r) => s + r.results, 0);
+  const dominantResultType = dominantResultTypeBySpend(rows);
+  const blendedCostPerResult =
+    totalResultsSum > 0
+      ? metaAlignedCostPerResultIdr(totalSpendIdr, totalResultsSum, dominantResultType ?? '—')
+      : null;
+
+  const executiveFootnote = `Reach tidak dijumlahkan antar baris (anti double count). Reach tertinggi satu baris: ${formatIdr(maxReachSingleAd)}. Untuk tipe Reach, cost per result diselaraskan dengan Meta: biaya per 1.000 orang jangkauan (bukan per satu orang). Jika beberapa tipe hasil tercampur dalam satu ad set, angka bersifat perkiraan.`;
 
   return {
     periodLabel,
@@ -326,16 +343,14 @@ export function summarizeMetaRows(rows: MetaAdRow[]): ReportSummary {
     rowCount: rows.length,
     totalSpendIdr,
     totalImpressions,
-    totalLinkClicks,
-    overallCtr,
+    totalResultsSum,
+    blendedCostPerResult,
+    dominantResultType,
     overallCpm,
     maxReachSingleAd,
-    topReachAds,
-    topMessagingAds,
-    topEngagementAds,
-    topAdSets,
+    adSetRankings,
     spendByObjective,
-    executiveBullets: bullets,
+    executiveFootnote,
   };
 }
 
