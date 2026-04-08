@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, type FormEvent } from 'react';
 import { flushSync } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { workspaceTitle } from '@/lib/constants/workspace';
@@ -27,6 +27,7 @@ import {
 import { WorkspaceRoleProvider } from '@/lib/contexts/WorkspaceRoleContext';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { OrganizationModal } from '@/components/dashboard/OrganizationModal';
+import { HashAwareNavLink } from '@/components/dashboard/HashAwareNavLink';
 import { createClient } from '@/lib/supabase/client';
 import type { User } from '@supabase/supabase-js';
 import type { Board, MemberRole } from '@/lib/types/board';
@@ -34,6 +35,16 @@ import { getTimeBasedGreeting, getDisplayName } from '@/lib/utils/greeting';
 import styles from './app-shell.module.css';
 
 const PENDING_NEW_BOARD_KEY = 'task-manager.pendingNewBoard';
+const COLOR_MODE_STORAGE_KEY = 'task-manager-color-mode';
+
+function readStoredColorMode(): 'light' | 'dark' {
+  if (typeof window === 'undefined') return 'light';
+  try {
+    return window.localStorage.getItem(COLOR_MODE_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
 
 function getPendingNewBoard(): Board | null {
   if (typeof window === 'undefined') return null;
@@ -82,6 +93,7 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
   const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; email: string; name: string; role: MemberRole }[]>([]);
   const [saveFeedback, setSaveFeedback] = useState(false);
   const [projectOrder, setProjectOrder] = useState<string[]>(() => (typeof window !== 'undefined' ? loadProjectOrder(workspaceTitle) : []));
+  const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
   const userRole: MemberRole | null = useMemo(() => {
     if (workspaceMembers.length === 0) return 'admin'; // first-time: allow full access to set up
     return getRoleForEmail(workspaceMembers, user?.email ?? undefined) ?? 'viewer';
@@ -114,6 +126,21 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
     window.addEventListener(PROJECT_ORDER_EVENT, handler);
     return () => window.removeEventListener(PROJECT_ORDER_EVENT, handler);
   }, []);
+
+  useLayoutEffect(() => {
+    const stored = readStoredColorMode();
+    document.documentElement.setAttribute('data-theme', stored);
+    setColorMode(stored);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', colorMode);
+    try {
+      window.localStorage.setItem(COLOR_MODE_STORAGE_KEY, colorMode);
+    } catch {
+      /* ignore quota / private mode */
+    }
+  }, [colorMode]);
 
   const orderedBoards = useMemo(() => sortBoardsByOrder(boards, projectOrder), [boards, projectOrder]);
   /** Programs/Projects section: always show A–Z, never reorder on click */
@@ -333,9 +360,31 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
               <Link className={`${styles.navItemIcon} ${activeSection === 'settings' ? styles.navItemActive : ''}`} href="/settings" title="Settings" aria-label="Settings">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
               </Link>
-              <Link className={`${styles.navItemIcon} ${activeSection === 'report-generator' ? styles.navItemActive : ''}`} href="/report-generator" title="Report Generator" aria-label="Report Generator">
+              <HashAwareNavLink
+                href="/report-generator"
+                pathnameMatch="/report-generator"
+                expectedHash=""
+                className={styles.navItemIcon}
+                activeClassName={styles.navItemActive}
+                title="Report Generator"
+                aria-label="Report Generator"
+              >
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>
-              </Link>
+              </HashAwareNavLink>
+              <HashAwareNavLink
+                href="/report-generator#tiktok-sales"
+                pathnameMatch="/report-generator"
+                expectedHash="tiktok-sales"
+                className={styles.navItemIcon}
+                activeClassName={styles.navItemActive}
+                title="Laporan Penjualan TikTok"
+                aria-label="Laporan Penjualan TikTok"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
+                  <path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12" />
+                </svg>
+              </HashAwareNavLink>
               <Link className={`${styles.navItemIcon} ${activeSection === 'chat-generator' ? styles.navItemActive : ''}`} href="/chat-generator" title="Mbah Dukun" aria-label="Mbah Dukun">
                 <span className={styles.navIconEmoji} aria-hidden="true">👵</span>
               </Link>
@@ -371,12 +420,24 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
           >
             Settings
           </Link>
-          <Link
-            className={`${styles.navItem} ${activeSection === 'report-generator' ? styles.navItemActive : ''}`}
+          <HashAwareNavLink
             href="/report-generator"
+            pathnameMatch="/report-generator"
+            expectedHash=""
+            className={styles.navItem}
+            activeClassName={styles.navItemActive}
           >
             Report Generator
-          </Link>
+          </HashAwareNavLink>
+          <HashAwareNavLink
+            href="/report-generator#tiktok-sales"
+            pathnameMatch="/report-generator"
+            expectedHash="tiktok-sales"
+            className={styles.navItem}
+            activeClassName={styles.navItemActive}
+          >
+            Laporan Penjualan TikTok
+          </HashAwareNavLink>
           <Link
             className={`${styles.navItem} ${activeSection === 'chat-generator' ? styles.navItemActive : ''}`}
             href="/chat-generator"
@@ -685,6 +746,15 @@ export function AppShell({ children, activeBoardId, activeSection }: AppShellPro
                 <span className={styles.saveButtonLabel}>{saveFeedback ? 'Saved!' : 'Save'}</span>
               </button>
             )}
+            <button
+              type="button"
+              className={styles.themeToggleButton}
+              onClick={() => setColorMode((m) => (m === 'light' ? 'dark' : 'light'))}
+              aria-label={colorMode === 'light' ? 'Aktifkan dark mode' : 'Aktifkan light mode'}
+              title={colorMode === 'light' ? 'Dark mode' : 'Light mode'}
+            >
+              {colorMode === 'light' ? '☾' : '☀'}
+            </button>
             {canEdit && (
               <button className={styles.primaryButton} type="button" onClick={openCreateBoardModal}>
                 New project

@@ -53,6 +53,11 @@
   transition: grid-template-columns 0.25s ease;
 }
 
+html[data-theme='dark'] .shell {
+  --text-soft: #7ec1d9;
+  --text-secondary: #b8dce8;
+}
+
 .shell.sidebarCollapsedShell {
   grid-template-columns: 80px minmax(0, 1fr);
 }
@@ -491,6 +496,44 @@ button.navItem {
   border-radius: 999px;
   background: #fff;
   color: var(--text-primary);
+}
+
+html[data-theme='dark'] .searchInput {
+  background: rgb(var(--panel-rgb) / 0.55);
+  border-color: rgb(var(--brand-rgb) / 0.35);
+  color: var(--text-primary);
+}
+
+.themeToggleButton {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 1px solid rgb(var(--brand-rgb) / 0.32);
+  border-radius: 999px;
+  background: rgb(var(--panel-rgb) / 0.75);
+  color: var(--brand-strong);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.12s ease;
+}
+
+.themeToggleButton:hover {
+  background: rgb(var(--brand-rgb) / 0.16);
+  border-color: rgb(var(--brand-rgb) / 0.48);
+}
+
+.themeToggleButton:active {
+  transform: scale(0.96);
+}
+
+html[data-theme='dark'] .themeToggleButton {
+  background: rgb(var(--panel-rgb) / 0.5);
+  color: var(--text-primary);
+  border-color: rgb(var(--brand-rgb) / 0.4);
 }
 
 .saveButton {

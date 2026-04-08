@@ -26,6 +26,33 @@
   --font-sans: var(--font-poppins), "Poppins", "Segoe UI", Arial, sans-serif;
 }
 
+/* Global light/dark — di-set dari tombol topbar (lihat AppShell) */
+html[data-theme='dark'] {
+  --bg-canvas: #0f1828;
+  --bg-panel: #1a2f45;
+  --bg-subtle: #246e7f;
+  --bg-sidebar: #2d4f66;
+  --text-primary: #f0f2f0;
+  --text-secondary: #b8dce8;
+  --text-soft: #7ec1d9;
+  --border-soft: #3d6b82;
+  --border-strong: #7ec1d9;
+  --brand: #7ec1d9;
+  --brand-strong: #e8f4f8;
+  --success: #7ec1d9;
+  --warning: #c9b8a3;
+  --danger: #c4a896;
+  --info: #5eb0c9;
+  --brand-rgb: 126 193 217;
+  --brand-strong-rgb: 232 244 248;
+  --success-rgb: 126 193 217;
+  --warning-rgb: 201 184 163;
+  --danger-rgb: 196 168 150;
+  --info-rgb: 94 176 201;
+  --panel-rgb: 40 72 92;
+  --shadow-panel: 0 24px 60px rgba(0, 0, 0, 0.42);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -47,6 +74,17 @@ body {
   background-size: cover;
   color: var(--text-primary);
   font-family: var(--font-sans);
+}
+
+html[data-theme='dark'] body {
+  background:
+    linear-gradient(
+      180deg,
+      rgb(12 22 34 / 0.94) 0%,
+      rgb(30 58 90 / 0.88) 48%,
+      rgb(8 16 26 / 0.96) 100%
+    ),
+    url("/dashboard-bg.jpg");
 }
 
 a {

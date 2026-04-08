@@ -14,6 +14,159 @@
   border: 1px solid rgb(var(--brand-rgb) / 0.18);
 }
 
+.reportHeroTiktok {
+  border-color: rgb(var(--brand-rgb) / 0.22);
+  background: linear-gradient(
+    155deg,
+    rgb(var(--panel-rgb) / 0.96) 0%,
+    rgb(var(--brand-rgb) / 0.09) 42%,
+    rgb(var(--panel-rgb) / 0.9) 100%
+  );
+}
+
+.reportStack {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.twoColCharts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 960px) {
+  .twoColCharts {
+    grid-template-columns: 1fr;
+  }
+}
+
+.threeColRankGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+
+@media (max-width: 1100px) {
+  .threeColRankGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rankInfographicCard {
+  border-radius: 20px;
+  border: 1px solid rgb(var(--brand-rgb) / 0.14);
+  background: linear-gradient(
+    168deg,
+    rgb(var(--brand-rgb) / 0.11) 0%,
+    rgb(var(--panel-rgb) / 0.88) 52%,
+    rgb(var(--panel-rgb) / 0.92) 100%
+  );
+  padding: 18px 20px 20px;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.06) inset;
+}
+
+.rankInfographicTitle {
+  margin: 0 0 4px;
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.rankInfographicHint {
+  margin: 0 0 16px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--text-soft);
+}
+
+.barRankRow {
+  margin-bottom: 14px;
+}
+
+.barRankRow:last-child {
+  margin-bottom: 0;
+}
+
+.barRankHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.barRankBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: rgb(var(--brand-rgb) / 0.2);
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.barCampaignName {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barValueCompact {
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.barTrackTall {
+  height: 14px;
+  border-radius: 999px;
+  background: rgb(var(--brand-rgb) / 0.14);
+  overflow: hidden;
+}
+
+.barFillRoi {
+  height: 100%;
+  border-radius: 999px;
+  min-width: 4px;
+  background: linear-gradient(90deg, rgb(34 139 87 / 0.95), rgb(60 179 113 / 0.75));
+}
+
+.barFillGmv {
+  height: 100%;
+  border-radius: 999px;
+  min-width: 4px;
+  background: linear-gradient(90deg, var(--brand-strong), rgb(var(--brand-rgb) / 0.55));
+}
+
+.barFillSpend {
+  height: 100%;
+  border-radius: 999px;
+  min-width: 4px;
+  background: linear-gradient(90deg, rgb(var(--brand-rgb) / 0.92), var(--brand));
+}
+
+.barFillMuted {
+  opacity: 0.82;
+  background: linear-gradient(90deg, var(--brand-strong), rgb(var(--brand-rgb) / 0.55));
+}
+
 .heroTextCol {
   min-width: 0;
 }
