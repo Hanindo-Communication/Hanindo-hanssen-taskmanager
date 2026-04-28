@@ -1,178 +1,161 @@
 # Supabase Setup – Task Manager
 
-Panduan singkat membuat tabel di Supabase, login (Auth), dan menyambungkan app.
+Panduan singkat: apa yang harus kamu lakukan di **Supabase Dashboard**, Auth, dan penyambungan ke app / Vercel.
 
 ---
 
-## Langkah yang harus kamu lakukan sekarang (sekali saja)
+## Checklist: apa yang harus kamu lakukan di Supabase
 
-1. **Buka Supabase Dashboard**  
-   https://supabase.com/dashboard → pilih project kamu (yang connect ke MCP).
+Ikuti urutan ini untuk **satu project Supabase** yang dipakai app ini (localhost + Vercel).
 
-2. **Ambil API keys**  
-   Di sidebar: **Project Settings** (ikon gerigi) → **API**.  
-   Di sana ada:
-   - **Project URL** — sudah terisi di `.env.local` (repo ini).
-   - **anon public** — klik Reveal / Copy, lalu paste ke `.env.local` di baris `NEXT_PUBLIC_SUPABASE_ANON_KEY=...`.
-   - **service_role** — klik Reveal / Copy, lalu paste ke `.env.local` di baris `SUPABASE_SERVICE_ROLE_KEY=...`.  
-   Simpan file `.env.local`.
+| # | Di Supabase | Keterangan |
+|---|-------------|------------|
+| 1 | **Project Settings → API** | Copy **Project URL** dan **anon public** key → isi `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` di `.env.local` dan di **Vercel → Environment Variables**. Tanpa ini, app tidak bisa baca/tulis DB. |
+| 2 | **SQL Editor** | Jalankan migration SQL dari folder `supabase/migrations/` — urutan wajib ada di bagian **[Urutan migration SQL](#urutan-migration-sql)** di bawah. |
+| 3 | **(Opsional) Auth users** | Kalau pakai login email: copy **service_role** key ke `.env.local` saja (jangan commit), lalu jalankan `node --env-file=.env.local scripts/create-auth-users.mjs` dari komputer lokal. |
+| 4 | **Vercel** | Pastikan env sama dengan langkah 1; **Redeploy** setelah mengubah env. |
 
-3. **Buat 5 user login (sekali jalan)**  
-   Di terminal (folder project):
+### Verifikasi cepat (SQL Editor)
 
+```sql
+-- Harus ada baris setelah kamu menyimpan BM/BA dari Settings (admin)
+select id, jsonb_typeof(payload), updated_at from public.workspace_bm_ba_settings;
+
+-- Role per member (kalau sudah jalankan SQL § workspace_members)
+select email, role from public.workspace_members limit 10;
+```
+
+Kalau query pertama error *relation does not exist*, jalankan file **`006_workspace_bm_ba_settings.sql`**. Kalau kedua error, jalankan SQL **[§ workspace_members](#5-tabel-workspace_members-role-per-email)**.
+
+---
+
+## Urutan migration SQL
+
+Buka **Supabase → SQL Editor → New query**. Untuk tiap file: buka di repo → salin **seluruh isi** → **Run**. Kalau ada error "already exists", biasanya migration itu sudah pernah dijalankan — lanjut ke berikutnya kecuali ada pesan lain yang mengharuskan perbaikan.
+
+| Urutan | File di repo | Untuk apa |
+|--------|----------------|-----------|
+| 1 | `001_initial_schema.sql` | Tabel task/board (`boards`, `board_members`, `task_groups`, `tasks`), enum status/priority, fungsi **`set_updated_at()`**, RLS dasar. |
+| 2 | `002_board_history_logs.sql` | Kolom **`history_logs`** di `boards`. |
+| 3 | `003_allow_text_ids.sql` | **Hanya jika** board/task pakai **ID string** (mis. `product-launch`). Kalau pakai UUID default dari DB, bisa **lewati**. |
+| 4 | `004_overview_member_projects.sql` | Tabel **`overview_member_projects`** (Overview / list projects). Perlu **`set_updated_at`** dari langkah 1. |
+| 5 | `005_task_status_three_values.sql` | Mengubah enum status task ke 3 nilai (`pending`, `followUp`, `done`). **Jalankan hanya jika** `tasks` masih pakai enum **lama** dari `001` (5 nilai). Kalau schema task sudah lain / sudah migrate, diskusi dulu atau skip (bisa error). |
+| 6 | `006_workspace_bm_ba_settings.sql` | Tabel **`workspace_bm_ba_settings`** + trigger + RLS (BM/BA di Settings). Bisa dijalankan sendiri di project yang belum punya `001` — file ini mendefinisikan **`set_updated_at`** jika belum ada. |
+| — | **[§ 5](#5-tabel-workspace_members-role-per-email)** di dokumen ini | Tabel **`workspace_members`** (role admin/member/viewer per email). Bukan file `.sql` di migrations; salin blok SQL dari dokumen ini. |
+
+**Ringkas:**
+
+- **Project baru khusus untuk app ini:** jalankan **1 → 2 → (3 jika ID text) → 4 → 5 → 6**, lalu SQL **§ 5**.
+- **Hanya perlu Settings BM/BA + role:** minimal **`006_workspace_bm_ba_settings.sql`** + SQL **§ 5** (kalau fitur role dipakai).
+
+---
+
+## Langkah pertama (sekali saja): API keys & jalankan app
+
+1. Buka https://supabase.com/dashboard → pilih project.
+2. **Project Settings → API**: salin URL dan **anon public** → `.env.local`:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+   ```
+3. Untuk script create user: tambahkan **`SUPABASE_SERVICE_ROLE_KEY`** (service_role — rahasia, jangan commit).
+4. Jalankan migration sesuai [Urutan migration SQL](#urutan-migration-sql).
+5. (Opsional) Buat user login:
    ```powershell
    node --env-file=.env.local scripts/create-auth-users.mjs
    ```
-
-   Kalau sukses, akan ada pesan "Created: ..." untuk tiap email. User bisa login dengan password **test123**.
-
-4. **Jalankan app**  
-   `npm run dev` lalu buka http://localhost:3000. Kamu akan diarahkan ke `/login`. Masuk dengan salah satu email (mis. hanssen@hanindo.co.id) dan password **test123**.
+   Password default script: **test123**.
+6. `npm run dev` → login di `/login`.
 
 ---
 
 ## 0. Login dengan email / password (Auth)
 
-App sudah pakai **Supabase Auth**. Rekan kerja harus login dengan email @hanindo.co.id.
+Detail sama seperti di atas: env `NEXT_PUBLIC_SUPABASE_*`, script dengan `SUPABASE_SERVICE_ROLE_KEY`.
 
-### Environment variables
-
-Di root project buat `.env.local`:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-Ambil nilai dari Supabase Dashboard → **Project Settings** → **API** (Project URL dan anon public key).
-
-### Membuat 5 user (sekali jalan)
-
-Supabase Dashboard tidak bisa set password bulk. Pakai script ini (perlu **service_role** key):
-
-1. Di Supabase: **Project Settings** → **API** → copy **service_role** key (rahasia, jangan commit).
-2. Set env lalu jalankan:
-
-```bash
-# Windows PowerShell
-$env:SUPABASE_SERVICE_ROLE_KEY="service_role_key_dari_dashboard"
-$env:NEXT_PUBLIC_SUPABASE_URL="https://xxxxx.supabase.co"
-node scripts/create-auth-users.mjs
-```
-
-Script akan membuat user dengan password **test123** untuk:
-
-- Kezia@hanindo.co.id  
-- Dinda@hanindo.co.id  
-- vira@hanindo.co.id  
-- hanssen@hanindo.co.id  
-- admin@hanindo.co.id  
-
-Setelah itu mereka bisa **Sign in** di `/login` dengan email tersebut dan password `test123`.
+Membuat user manual via Dashboard (**Authentication → Users**) juga bisa.
 
 ---
 
-## 1. Buat tabel di Supabase
+## 1. Isi migration `001_initial_schema.sql`
 
-1. Buka [Supabase Dashboard](https://supabase.com/dashboard) → pilih project (atau buat baru).
-2. Di sidebar: **SQL Editor** → **New query**.
-3. Buka file `supabase/migrations/001_initial_schema.sql` di repo ini, salin **seluruh isi** ke editor SQL.
-4. Klik **Run**.
+Sudah dirangkum di [Urutan migration SQL](#urutan-migration-sql). Hasilnya antara lain tabel:
 
-Kalau berhasil, akan ada 4 tabel:
+| Tabel | Keterangan |
+|-------|------------|
+| `boards` | Project/board |
+| `board_members` | Anggota per board |
+| `task_groups` | Group tugas |
+| `tasks` | Task per group |
 
-| Tabel           | Keterangan                          |
-|-----------------|-------------------------------------|
-| `boards`        | Project/board (nama, workspace, stats) |
-| `board_members` | Anggota per board (nama, initials, color) |
-| `task_groups`   | Group tugas per board (nama, color)  |
-| `tasks`         | Task per group (nama, status, due_date, priority, progress, notes) |
+---
 
-Relasi: `boards` → `board_members`, `task_groups` → `tasks` (dan `tasks.assignee_id` → `board_members`).
+## 2. Environment variables
 
-## 2. Environment variables (untuk koneksi app)
+Lihat checklist bagian atas. `.env.local` jangan di-commit.
 
-Lihat **§0** di atas. Untuk script create user saja butuh tambahan `SUPABASE_SERVICE_ROLE_KEY`.  
-Jangan commit `.env.local` (biasanya sudah ada di `.gitignore`).
+---
 
-## 3. Langkah berikutnya (integrasi app)
+## 3. Integrasi app (board/task)
 
-Saat ini data disimpan di **localStorage** lewat `lib/utils/board-storage.ts`. Untuk menyimpan ke Supabase:
+App sudah memakai Supabase client (`lib/supabase/`). Mapping board/task mengikuti tabel di migration `001` (+ `002`, `003`, `005` sesuai kasus).
 
-1. Pasang client: `npm install @supabase/supabase-js`
-2. Buat client Supabase (mis. `lib/supabase/client.ts`) pakai `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-3. Di `board-storage.ts` (atau layer service baru), ganti `localStorage` dengan:
-   - **Read:** query `boards`, `board_members`, `task_groups`, `tasks` lalu bentuk objek `Board[]` seperti di `lib/types/board.ts`.
-   - **Write:** saat create/update/delete board (atau task), panggil `insert`/`update`/`delete` ke tabel yang sesuai.
-
-Mapping singkat:
-
-- Satu **Board** → 1 row `boards` + N rows `board_members` + N rows `task_groups` (+ N rows `tasks` per group).
-- `TaskItem` → 1 row `tasks`; `assignee_id` = `board_members.id` (uuid).
-- `TaskStatus` / `TaskPriority` di DB pakai enum `task_status` dan `task_priority` (string sama dengan di TypeScript).
+---
 
 ## 4. Row Level Security (RLS)
 
-Di migration, RLS sudah **enabled** dengan policy "allow all" agar development mudah. Sebelum production:
-
-- Tambah kolom `user_id` (atau `owner_id`) di `boards` jika pakai Supabase Auth.
-- Ganti policy jadi `using (auth.uid() = user_id)` (atau sesuai aturan tim).
-
-Schema lengkap dan constraint ada di `supabase/migrations/001_initial_schema.sql`.
+Migration pakai policy longgar **`using (true)`** untuk kemudahan development. Untuk production, sesuaikan dengan `auth.uid()` dan kebutuhan tim.
 
 ---
 
-## 4b. Deploy di Vercel (supaya data tersimpan setelah refresh)
+## 4b. Deploy di Vercel
 
-Agar perubahan board/task tersimpan ke Supabase (bukan cuma localStorage) dan tetap ada setelah refresh/keluar-masuk:
-
-1. **Set environment variables di Vercel**  
-   Vercel → Project → **Settings** → **Environment Variables**. Tambah:
-   - `NEXT_PUBLIC_SUPABASE_URL` = URL project Supabase (sama dengan di `.env.local`)
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY` = anon key dari Supabase Dashboard → Project Settings → API  
-   Simpan lalu **redeploy** (Deployments → ... → Redeploy).
-
-2. **Jalankan migration 003 jika board id pakai string**  
-   Kalau kamu pakai board id seperti `product-launch` (bukan UUID), jalankan isi file `supabase/migrations/003_allow_text_ids.sql` di Supabase Dashboard → SQL Editor, supaya board default bisa di-save ke Supabase.
-
-3. **Auto-save**  
-   App sudah auto-save: setiap perubahan board di-save ke Supabase (debounce ~400 ms) dan saat tab ditutup/refresh (request pakai `keepalive`). Tidak perlu save manual; cukup deploy ke GitHub, Vercel akan build ulang. Data board/task tetap di Supabase.
+1. **Settings → Environment Variables:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` — sama persis dengan project Supabase yang dipakai.
+2. **Redeploy** setelah mengubah env.
+3. Migration **`003`** hanya jika board ID string — lihat tabel urutan.
+4. Auto-save board/overview mengikuti implementasi di app (debounce, dll.).
 
 ---
 
-## 5. Tabel workspace_members (Role per member)
+## 5. Tabel workspace_members (role per email)
 
-Untuk fitur **Settings → Role per member** (admin/member/viewer by email), buat tabel workspace members:
-
-1. Supabase Dashboard → **SQL Editor** → New query.
-2. Jalankan:
+Untuk **Settings → Role per member** (admin/member/viewer per email), **SQL Editor** → jalankan:
 
 ```sql
-create table if not exists workspace_members (
+create table if not exists public.workspace_members (
   id uuid primary key default gen_random_uuid(),
   email text not null unique,
   name text not null default '',
   role text not null default 'member' check (role in ('admin', 'member', 'viewer'))
 );
 
-alter table workspace_members enable row level security;
+alter table public.workspace_members enable row level security;
 
-create policy "Allow all for anon" on workspace_members
+drop policy if exists "Allow all for anon" on public.workspace_members;
+create policy "Allow all for anon" on public.workspace_members
   for all using (true) with check (true);
 ```
 
-3. Setelah itu, app akan baca/tulis role lewat `lib/utils/workspace-members.ts` (fallback ke localStorage jika tabel belum ada).
+App membaca/menulis lewat `lib/utils/workspace-members.ts`; fallback localStorage jika tabel/query gagal.
 
 ---
 
-## 6. Tabel workspace_bm_ba_settings (Settings → BM/BA panel)
+## 6. Tabel workspace_bm_ba_settings (Settings → BM/BA)
 
-Untuk **Role per member** — job description, daftar client + incentives per Hanssen/Kezia — jalankan isi file `supabase/migrations/006_workspace_bm_ba_settings.sql` di Supabase Dashboard → **SQL Editor** (sekali saja per project).
+1. Jalankan **`supabase/migrations/006_workspace_bm_ba_settings.sql`** di **SQL Editor** (sekali per project).
+2. Satu baris singleton **`id = 'default'`**, kolom **`payload`** JSON (struktur `MemberBmBaState`).
+3. Sinkron: debounce ~750 ms setelah edit + simpan langsung saat tombol **Save** di header.
+4. Fallback **localStorage** jika Supabase tidak dikonfigurasi atau error.
 
-Migration itu juga mendefinisikan `public.set_updated_at()` jika belum ada, supaya aman walau schema dasar tanpa migration `001_initial_schema`.
+Pastikan env Vercel sudah berisi URL + anon key project yang sama.
 
-- Satu baris singleton (`id = 'default'`) menyimpan kolom `payload` JSON (struktur sama dengan `MemberBmBaState` di app).
-- **Sinkron Supabase:** setelah mengisi field (admin), data di-upsert ke tabel ini secara **debounce ~750 ms**, dan langsung lagi saat tombol **Save** di header sidebar diklik (`task-manager:save-request`).
-- Fallback **`localStorage`** jika Supabase tidak dikonfigurasi atau query gagal.
+---
 
-Pastikan di **Vercel** sudah ada `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` (sama seperti §4b).
+## Troubleshooting singkat
+
+| Gejala | Yang dicek |
+|--------|------------|
+| BM/BA tidak tersimpan ke cloud | Env Vercel / `.env.local`; tabel **`workspace_bm_ba_settings`** ada; cek browser **Console** untuk error Supabase. |
+| Error `set_updated_at` tidak ada | Jalankan **`006_workspace_bm_ba_settings.sql`** (sudah menyertakan `create or replace function set_updated_at`). |
+| Error enum / kolom tidak cocok | Migration **`005`** hanya untuk schema task dari **`001`** yang belum diubah; jangan jalankan dua kali. |
+| Role member tidak sinkron | Tabel **`workspace_members`** + policy; jalankan SQL **§ 5**. |
