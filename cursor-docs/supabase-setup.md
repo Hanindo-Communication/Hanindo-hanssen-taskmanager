@@ -21,11 +21,11 @@ Ikuti urutan ini untuk **satu project Supabase** yang dipakai app ini (localhost
 -- Harus ada baris setelah kamu menyimpan BM/BA dari Settings (admin)
 select id, jsonb_typeof(payload), updated_at from public.workspace_bm_ba_settings;
 
--- Role per member (kalau sudah jalankan SQL § workspace_members)
+-- Role per member (setelah migration 007 / §5)
 select email, role from public.workspace_members limit 10;
 ```
 
-Kalau query pertama error *relation does not exist*, jalankan file **`006_workspace_bm_ba_settings.sql`**. Kalau kedua error, jalankan SQL **[§ workspace_members](#5-tabel-workspace_members-role-per-email)**.
+Kalau query pertama error *relation does not exist*, jalankan **`006_workspace_bm_ba_settings.sql`**. Kalau kedua error, jalankan **`007_workspace_members.sql`** (atau SQL di **[§ 5](#5-tabel-workspace_members-role-per-email)**).
 
 ---
 
@@ -41,12 +41,9 @@ Buka **Supabase → SQL Editor → New query**. Untuk tiap file: buka di repo �
 | 4 | `004_overview_member_projects.sql` | Tabel **`overview_member_projects`** (Overview / list projects). Perlu **`set_updated_at`** dari langkah 1. |
 | 5 | `005_task_status_three_values.sql` | Mengubah enum status task ke 3 nilai (`pending`, `followUp`, `done`). **Jalankan hanya jika** `tasks` masih pakai enum **lama** dari `001` (5 nilai). Kalau schema task sudah lain / sudah migrate, diskusi dulu atau skip (bisa error). |
 | 6 | `006_workspace_bm_ba_settings.sql` | Tabel **`workspace_bm_ba_settings`** + trigger + RLS (BM/BA di Settings). Bisa dijalankan sendiri di project yang belum punya `001` — file ini mendefinisikan **`set_updated_at`** jika belum ada. |
-| — | **[§ 5](#5-tabel-workspace_members-role-per-email)** di dokumen ini | Tabel **`workspace_members`** (role admin/member/viewer per email). Bukan file `.sql` di migrations; salin blok SQL dari dokumen ini. |
+| 7 | `007_workspace_members.sql` | Tabel **`workspace_members`** (role admin/member/viewer per email). |
 
-**Ringkas:**
-
-- **Project baru khusus untuk app ini:** jalankan **1 → 2 → (3 jika ID text) → 4 → 5 → 6**, lalu SQL **§ 5**.
-- **Hanya perlu Settings BM/BA + role:** minimal **`006_workspace_bm_ba_settings.sql`** + SQL **§ 5** (kalau fitur role dipakai).
+**Ringkas:** project baru untuk app ini → jalankan **001 → 007** sesuai kebutuhan (lewati **003** / **005** kalau tidak relevan). Hanya fitur Settings (BM/BA + role) → minimal **`006`** + **`007`**.
 
 ---
 
@@ -119,7 +116,7 @@ Migration pakai policy longgar **`using (true)`** untuk kemudahan development. U
 
 ## 5. Tabel workspace_members (role per email)
 
-Untuk **Settings → Role per member** (admin/member/viewer per email), **SQL Editor** → jalankan:
+Untuk **Settings → Role per member** (admin/member/viewer per email): di **SQL Editor** jalankan file **`supabase/migrations/007_workspace_members.sql`** (isi sama dengan blok di bawah).
 
 ```sql
 create table if not exists public.workspace_members (
@@ -158,4 +155,4 @@ Pastikan env Vercel sudah berisi URL + anon key project yang sama.
 | BM/BA tidak tersimpan ke cloud | Env Vercel / `.env.local`; tabel **`workspace_bm_ba_settings`** ada; cek browser **Console** untuk error Supabase. |
 | Error `set_updated_at` tidak ada | Jalankan **`006_workspace_bm_ba_settings.sql`** (sudah menyertakan `create or replace function set_updated_at`). |
 | Error enum / kolom tidak cocok | Migration **`005`** hanya untuk schema task dari **`001`** yang belum diubah; jangan jalankan dua kali. |
-| Role member tidak sinkron | Tabel **`workspace_members`** + policy; jalankan SQL **§ 5**. |
+| Role member tidak sinkron | Jalankan **`007_workspace_members.sql`** (lihat **§ 5**). |
