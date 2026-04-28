@@ -162,3 +162,17 @@ create policy "Allow all for anon" on workspace_members
 ```
 
 3. Setelah itu, app akan baca/tulis role lewat `lib/utils/workspace-members.ts` (fallback ke localStorage jika tabel belum ada).
+
+---
+
+## 6. Tabel workspace_bm_ba_settings (Settings → BM/BA panel)
+
+Untuk **Role per member** — job description, daftar client + incentives per Hanssen/Kezia — jalankan isi file `supabase/migrations/006_workspace_bm_ba_settings.sql` di Supabase Dashboard → **SQL Editor** (sekali saja per project).
+
+Migration itu juga mendefinisikan `public.set_updated_at()` jika belum ada, supaya aman walau schema dasar tanpa migration `001_initial_schema`.
+
+- Satu baris singleton (`id = 'default'`) menyimpan kolom `payload` JSON (struktur sama dengan `MemberBmBaState` di app).
+- **Sinkron Supabase:** setelah mengisi field (admin), data di-upsert ke tabel ini secara **debounce ~750 ms**, dan langsung lagi saat tombol **Save** di header sidebar diklik (`task-manager:save-request`).
+- Fallback **`localStorage`** jika Supabase tidak dikonfigurasi atau query gagal.
+
+Pastikan di **Vercel** sudah ada `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_ANON_KEY` (sama seperti §4b).

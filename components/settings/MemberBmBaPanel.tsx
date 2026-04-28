@@ -12,6 +12,8 @@ import {
 } from '@/lib/utils/member-bm-ba-storage';
 import styles from './MemberBmBaPanel.module.css';
 
+const REMOTE_DEBOUNCE_MS = 750;
+
 const SLOTS: { slot: MemberBmBaSlot; name: string; roleShort: string }[] = [
   { slot: 'hanssen', name: 'Hanssen', roleShort: 'BM' },
   { slot: 'kezia', name: 'Kezia', roleShort: 'BA' },
@@ -54,6 +56,7 @@ export function MemberBmBaPanel() {
   const [baseline, setBaseline] = useState<BaselineMap>(emptyBaseline);
   const stateRef = useRef<MemberBmBaState | null>(null);
   stateRef.current = state;
+  const remoteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     loadMemberBmBa().then((data) => {
@@ -67,6 +70,11 @@ export function MemberBmBaPanel() {
       if (!prev) return prev;
       const next = updater(prev);
       saveMemberBmBaToStorage(next);
+      if (remoteTimerRef.current) clearTimeout(remoteTimerRef.current);
+      remoteTimerRef.current = setTimeout(() => {
+        remoteTimerRef.current = null;
+        void saveMemberBmBaRemote(next);
+      }, REMOTE_DEBOUNCE_MS);
       return next;
     });
   }, []);
@@ -76,10 +84,25 @@ export function MemberBmBaPanel() {
       const s = stateRef.current;
       if (!s) return;
       setBaseline(rebuildBaseline(s));
+      if (remoteTimerRef.current) {
+        clearTimeout(remoteTimerRef.current);
+        remoteTimerRef.current = null;
+      }
       void saveMemberBmBaRemote(s);
     };
     window.addEventListener('task-manager:save-request', handler);
     return () => window.removeEventListener('task-manager:save-request', handler);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (remoteTimerRef.current) {
+        clearTimeout(remoteTimerRef.current);
+        remoteTimerRef.current = null;
+      }
+      const s = stateRef.current;
+      if (s) void saveMemberBmBaRemote(s);
+    };
   }, []);
 
   const setJobDesc = useCallback(
