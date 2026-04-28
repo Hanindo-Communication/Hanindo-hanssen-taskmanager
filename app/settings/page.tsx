@@ -1,5 +1,5 @@
 import { AppShell } from '@/components/dashboard/app-shell';
-import { MembersTable } from '@/components/settings/MembersTable';
+import { MemberBmBaPanel } from '@/components/settings/MemberBmBaPanel';
 import styles from './settings.module.css';
 
 export default function SettingsPage() {
@@ -23,11 +23,11 @@ export default function SettingsPage() {
         <section id="role-per-member" className={styles.settingsSection}>
           <h2 className={styles.sectionTitle}>Role per member</h2>
           <p className={styles.sectionDescription}>
-            Set each member’s role by email. When they log in with that email, they get the
-            permissions below. Only admins can edit this list.
+            BM and BA profiles: job description and client lists are stored in this browser.
+            Only workspace admins can edit these fields.
           </p>
 
-          <MembersTable />
+          <MemberBmBaPanel />
 
           <p className={styles.sectionDescription} style={{ marginTop: '20px' }}>
             Permissions by role:
